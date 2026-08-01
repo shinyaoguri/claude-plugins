@@ -1,0 +1,10 @@
+{
+  "$schema": "https://code.claude.com/schemas/marketplace.json",
+  "name": "shinyaoguri",
+  "description": "Personal Claude Code plugin marketplace — shared skills, commands, and agents across machines",
+  "owner": {
+    "name": "Shinya Oguri",
+    "url": "https://github.com/shinyaoguri"
+  },
+  "plugins": []
+}
