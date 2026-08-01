@@ -2,6 +2,15 @@
 
 個人用の Claude Code plugin marketplace。複数の PC 環境で同じスキル・コマンド・エージェントを使えるようにするためのリポジトリ。
 
+## プラグイン一覧
+
+| プラグイン | 対象 | 内容 |
+|---|---|---|
+| [metaphor-sketch](plugins/metaphor-sketch) | [metaphor](https://github.com/shinyaoguri/metaphor) でスケッチを書く人 | 観測ループ (observe→edit→verify) と watch→AI クライアントの起動順序の作法 (skill 2)、`/metaphor-new` `/metaphor-doctor` (command 2)、watch セッション検査 (SessionStart hook 1) |
+| [metaphor-contrib](plugins/metaphor-contrib) | [metaphor](https://github.com/shinyaoguri/metaphor) / [metaphor-cli](https://github.com/shinyaoguri/metaphor-cli) のコントリビュータ | クロスリポ契約・生成物の鮮度・リリース規約・CLI 拡張手順 (skill 4)、`/contract-check` `/quick-issue` (command 2) |
+
+いずれも対象リポジトリの正典ドキュメント (CLAUDE.md / AGENTS.md / DEVELOPMENT.md / CONTRACT.md) を複製せず、「いつ・何を読むか」を想起させる薄いルーターとして設計している (ドリフト防止)。
+
 ## 使い方
 
 ### marketplace の登録
