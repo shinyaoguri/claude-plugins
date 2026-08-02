@@ -66,6 +66,12 @@ claude-plugins/
 │       ├── commands/        # スラッシュコマンド (*.md)
 │       ├── agents/          # サブエージェント定義 (*.md)
 │       └── hooks/           # hooks 設定
+├── .claude/skills/          # このリポの開発専用スキル (配布しない)
+├── .github/                 # CI (ci.yml / freshness.yml)・テンプレート・Dependabot
+├── scripts/                 # 整合性・上流参照チェック (CI とローカル共用)
+├── docs/decisions/          # 設計判断の記録 (軽量 ADR)
+├── upstream-refs.json       # プラグインが参照する上流パスのマニフェスト
+├── CLAUDE.md                # 開発規約 (Claude Code 向け)
 └── README.md
 ```
 
@@ -93,3 +99,19 @@ claude-plugins/
    ```
 
 4. main へマージすると、各環境では `/plugin marketplace update shinyaoguri` (または自動更新) で反映される
+
+## 運用 (陳腐化防止)
+
+プラグインは上流ドキュメントへの薄いルーターのため、上流の変化への追従が保守の中心。仕組みの設計は [docs/decisions/0002](docs/decisions/0002-freshness-architecture.md)、開発時の規約は [CLAUDE.md](CLAUDE.md) を参照。
+
+| 層 | 実行 | 内容 |
+|---|---|---|
+| PR CI | 自動 ([ci.yml](.github/workflows/ci.yml)) | validate・整合性・version bump・マニフェスト網羅 |
+| 週次 | 自動 ([freshness.yml](.github/workflows/freshness.yml)) | 上流参照の実在・リンク切れ → label:freshness の Issue へ起票 |
+| 月次 | ローカル scheduled task | [portfolio-review](.claude/skills/portfolio-review/SKILL.md) スキルで利用状況・意味的ドリフト・仕組み自体を俯瞰レビュー |
+
+月次レビューの scheduled task は各マシンで一度だけ登録する。Claude Code に次を依頼すればよい:
+
+> claude-plugins リポジトリで /portfolio-review を実行する月次のスケジュールタスクを登録して
+
+検知・提案はすべて GitHub Issue に集約される (テンプレート: 改善提案 / ドリフト報告 / プラグイン新設・統廃合の提案)。
