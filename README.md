@@ -98,7 +98,7 @@ claude-plugins/
    }
    ```
 
-4. main へマージすると、各環境では `/plugin marketplace update shinyaoguri` (または自動更新) で反映される
+4. main へマージすると、各環境では `/plugin marketplace update shinyaoguri` (または自動更新) で反映される。**反映されるのは plugin.json の version が bump されたときだけ** (バージョン規約は [CLAUDE.md](CLAUDE.md) 参照)
 
 ## 運用 (陳腐化防止)
 
