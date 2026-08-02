@@ -10,8 +10,13 @@ err() { echo "NG: $*" >&2; fail=1; }
 
 jq -e . "$mp" >/dev/null || { echo "NG: $mp が JSON として不正" >&2; exit 1; }
 
+# version の正は plugin.json のみ。marketplace.json に書くと plugin.json が
+# 無警告で優先されるため公式非推奨 (二重管理の再発をここで止める)
+jq -e '[.plugins[] | select(has("version"))] | length == 0' "$mp" >/dev/null \
+  || err "marketplace.json のエントリに version がある (version は plugin.json のみに書く)"
+
 # marketplace 登録エントリ → 実体との一致
-while IFS=$'\t' read -r name source version; do
+while IFS=$'\t' read -r name source; do
   dir="${source#./}"
   pj="$dir/.claude-plugin/plugin.json"
   if [ ! -f "$pj" ]; then
@@ -19,11 +24,9 @@ while IFS=$'\t' read -r name source version; do
     continue
   fi
   pj_name=$(jq -r .name "$pj")
-  pj_ver=$(jq -r .version "$pj")
   [ "$pj_name" = "$name" ] || err "$name: plugin.json の name ($pj_name) が marketplace.json と不一致"
-  [ "$pj_ver" = "$version" ] || err "$name: version 不一致 (plugin.json=$pj_ver / marketplace.json=$version)"
   grep -q "plugins/$name" README.md || err "$name: README.md のプラグイン表に載っていない"
-done < <(jq -r '.plugins[] | [.name, .source, .version] | @tsv' "$mp")
+done < <(jq -r '.plugins[] | [.name, .source] | @tsv' "$mp")
 
 # plugins/ 直下のディレクトリ → marketplace への登録漏れ
 for d in plugins/*/; do

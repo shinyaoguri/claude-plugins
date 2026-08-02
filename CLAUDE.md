@@ -13,9 +13,12 @@
 - SKILL.md の frontmatter description は必ずクォートする (裸の `: ` が混ざると YAML パースが落ち、メタデータ全体が無視される)
 - CI と同じチェックはローカルで `scripts/check-consistency.sh` / `scripts/check-version-bump.sh` / `scripts/check-upstream-refs.sh --coverage` として実行できる
 
-## バージョン規約
+## バージョン規約 (ADR [0003](docs/decisions/0003-version-policy.md))
 
-- `plugins/<name>/` 配下を変更したら、plugin.json と marketplace.json の version を**同時に** bump する (PR CI が強制)
+- version の正は各 plugin.json のみ。**marketplace.json には version を書かない** (plugin.json が無警告で優先されるため公式非推奨。CI が検査)
+- **version を bump しないマージは他マシンへ伝搬しない** (クライアントは version 比較で更新判定する)
+- `plugins/<name>/` を触る PR は type を **feat (→ minor) / fix (→ patch)** に限定し、同じ PR 内で `scripts/bump-version.sh <name> <minor|patch>` で bump する。CI (pr-policy) が期待増分との完全一致を強制
+- **major は自動判定しない**。スキル・コマンドの削除/リネーム、hook の非互換変更、プラグイン統廃合などの破壊的変更は `release:major` ラベルで宣言する (`release:minor|patch|skip` での上書きも可。metaphor と同じ規約で、`!` 付きタイトルは type どおりに扱う)
 
 ## 記録規約 (メモリリセット耐性)
 
