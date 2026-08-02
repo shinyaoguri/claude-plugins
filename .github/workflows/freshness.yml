@@ -1,0 +1,68 @@
+# 週次の陳腐化検知: 上流リポ参照の実在チェック + 全 Markdown のリンク切れチェック。
+# ドリフトを検知したら label:freshness の Issue へ自動起票 (open が既にあればコメント追記)。
+# 意味的ドリフト・利用状況ベースの見直しは月次の portfolio-review スキル側が担う。
+name: Freshness
+
+on:
+  schedule:
+    - cron: '0 0 * * 1' # 毎週月曜 09:00 JST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 上流参照の実在チェック
+        id: refs
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/check-upstream-refs.sh --exists 2>&1 | tee refs-report.txt
+          exit "${PIPESTATUS[0]}"
+
+      - name: リンク切れチェック (lychee)
+        id: lychee
+        uses: lycheeverse/lychee-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          args: --no-progress './**/*.md'
+          output: lychee-report.md
+          fail: false
+
+      - name: ドリフトを Issue へ起票
+        if: steps.refs.outcome == 'failure' || steps.lychee.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "週次 freshness チェックがドリフトを検知した。"
+            echo
+            echo "## 上流参照チェック (scripts/check-upstream-refs.sh --exists)"
+            echo '```'
+            cat refs-report.txt 2>/dev/null || echo "(green)"
+            echo '```'
+            echo
+            echo "## リンクチェック (lychee)"
+            cat lychee-report.md 2>/dev/null || echo "(green)"
+            echo
+            echo "workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > issue-body.md
+          gh label create freshness --description "陳腐化・ドリフトの検知/報告" --color C2E0C6 --force
+          existing=$(gh issue list --label freshness --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file issue-body.md
+          else
+            gh issue create --title "freshness: 週次チェックがドリフトを検知" --label freshness --body-file issue-body.md
+          fi
+
+      - name: 検知があれば run を赤にする
+        if: steps.refs.outcome == 'failure' || steps.lychee.outputs.exit_code != '0'
+        run: exit 1
