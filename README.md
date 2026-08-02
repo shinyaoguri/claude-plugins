@@ -6,8 +6,8 @@
 
 | プラグイン | 対象 | 内容 |
 |---|---|---|
-| [metaphor-sketch](plugins/metaphor-sketch) | [metaphor](https://github.com/shinyaoguri/metaphor) でスケッチを書く人 | 観測ループ (observe→edit→verify) と watch→AI クライアントの起動順序の作法 (skill 2)、`/metaphor-new` `/metaphor-doctor` (command 2)、watch セッション検査 (SessionStart hook 1) |
-| [metaphor-contrib](plugins/metaphor-contrib) | [metaphor](https://github.com/shinyaoguri/metaphor) / [metaphor-cli](https://github.com/shinyaoguri/metaphor-cli) のコントリビュータ | クロスリポ契約・生成物の鮮度・リリース規約・CLI 拡張手順 (skill 4)、`/contract-check` `/quick-issue` (command 2) |
+| [metaphor-sketch](plugins/metaphor-sketch) | [metaphor](https://github.com/shinyaoguri/metaphor) でスケッチを書く人 | 観測ループ (observe→edit→verify) と watch→AI クライアントの起動順序の作法、`/metaphor-new` `/metaphor-doctor` (skill 4)、watch セッション検査 (SessionStart hook 1) |
+| [metaphor-contrib](plugins/metaphor-contrib) | [metaphor](https://github.com/shinyaoguri/metaphor) / [metaphor-cli](https://github.com/shinyaoguri/metaphor-cli) のコントリビュータ | クロスリポ契約・生成物の鮮度・リリース規約・CLI 拡張手順、`/contract-check` `/quick-issue` (skill 6) |
 
 いずれも対象リポジトリの正典ドキュメント (CLAUDE.md / AGENTS.md / DEVELOPMENT.md / CONTRACT.md) を複製せず、「いつ・何を読むか」を想起させる薄いルーターとして設計している (ドリフト防止)。
 
@@ -62,8 +62,7 @@ claude-plugins/
 │   └── <plugin-name>/
 │       ├── .claude-plugin/
 │       │   └── plugin.json  # プラグインのメタデータ
-│       ├── skills/          # スキル (各ディレクトリに SKILL.md)
-│       ├── commands/        # スラッシュコマンド (*.md)
+│       ├── skills/          # スキル (各ディレクトリに SKILL.md。スラッシュコマンドもここ)
 │       ├── agents/          # サブエージェント定義 (*.md)
 │       └── hooks/           # hooks 設定
 ├── .claude/skills/          # このリポの開発専用スキル (配布しない)
@@ -87,7 +86,7 @@ claude-plugins/
    }
    ```
 
-2. `skills/` や `commands/` など必要なコンテンツを追加する
+2. `skills/<skill-name>/SKILL.md` など必要なコンテンツを追加する。スラッシュコマンドも skills として作る (`commands/` は公式非推奨。他の非推奨構成は [ADR 0004](docs/decisions/0004-deprecation-guard.md) 参照、CI が検査)
 3. `.claude-plugin/marketplace.json` の `plugins` 配列にエントリを追加する
 
    ```json
@@ -106,7 +105,7 @@ claude-plugins/
 
 | 層 | 実行 | 内容 |
 |---|---|---|
-| PR CI | 自動 ([ci.yml](.github/workflows/ci.yml)) | validate・整合性・version bump・マニフェスト網羅 |
+| PR CI | 自動 ([ci.yml](.github/workflows/ci.yml)) | validate・整合性・公式非推奨パターン・version bump・マニフェスト網羅 |
 | 週次 | 自動 ([freshness.yml](.github/workflows/freshness.yml)) | 上流参照の実在・リンク切れ → label:freshness の Issue へ起票 |
 | 月次 | ローカル scheduled task | [portfolio-review](.claude/skills/portfolio-review/SKILL.md) スキルで利用状況・意味的ドリフト・仕組み自体を俯瞰レビュー |
 
