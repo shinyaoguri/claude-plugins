@@ -28,6 +28,8 @@ jobs:
           for d in plugins/*/; do claude plugin validate "$d"; done
       - name: marketplace ↔ plugin.json ↔ README の整合
         run: ./scripts/check-consistency.sh
+      - name: 公式非推奨パターンの検査
+        run: ./scripts/check-deprecated-patterns.sh
       - name: 上流参照のマニフェスト網羅 (upstream-refs.json)
         run: ./scripts/check-upstream-refs.sh --coverage
 
