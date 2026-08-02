@@ -4,6 +4,9 @@ name: CI
 
 on:
   pull_request:
+    # edited/labeled/unlabeled も対象: pr-policy はタイトルとラベルから期待 bump を
+    # 導出するため、それらの変更でも再検査が必要
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
   push:
     branches: [main]
 
@@ -28,12 +31,17 @@ jobs:
       - name: 上流参照のマニフェスト網羅 (upstream-refs.json)
         run: ./scripts/check-upstream-refs.sh --coverage
 
-  version-bump:
+  pr-policy:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    env:
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: プラグイン変更時の version bump を検査
+      - name: PR タイトルの Conventional Commits lint
+        run: ./scripts/check-pr-title.sh
+      - name: version bump の検査 (タイトル type / release:* ラベルから期待増分を導出)
         run: BASE_REF=origin/${{ github.base_ref }} ./scripts/check-version-bump.sh
