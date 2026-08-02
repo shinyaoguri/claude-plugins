@@ -6,12 +6,13 @@
 
 - プラグインは上流正典ドキュメントへの**薄いルーター**。正典の内容を複製しない (ADR [0001](docs/decisions/0001-thin-router.md))
 - プラグイン本文に上流リポのパス・ファイル参照を書き足したら [upstream-refs.json](upstream-refs.json) にも追記する (PR CI の coverage チェックが漏れを検出する)
+- 公式が非推奨とする構成は使わない (ADR [0004](docs/decisions/0004-deprecation-guard.md)、`scripts/check-deprecated-patterns.sh` が CI で強制)。スラッシュコマンドも `commands/` でなく `skills/<name>/SKILL.md` として作る
 
 ## 検証
 
 - `claude plugin validate` は**各プラグインディレクトリに対して**実行する。ルートへの validate は marketplace.json しか見ず、SKILL.md frontmatter の YAML 破損を検出できない
 - SKILL.md の frontmatter description は必ずクォートする (裸の `: ` が混ざると YAML パースが落ち、メタデータ全体が無視される)
-- CI と同じチェックはローカルで `scripts/check-consistency.sh` / `scripts/check-version-bump.sh` / `scripts/check-upstream-refs.sh --coverage` として実行できる
+- CI と同じチェックはローカルで `scripts/check-consistency.sh` / `scripts/check-deprecated-patterns.sh` / `scripts/check-version-bump.sh` / `scripts/check-upstream-refs.sh --coverage` として実行できる
 
 ## バージョン規約 (ADR [0003](docs/decisions/0003-version-policy.md))
 
@@ -29,7 +30,7 @@
 
 | 層 | 実行 | 正本 |
 |---|---|---|
-| PR CI | validate + 整合性 + version bump + マニフェスト網羅 | [.github/workflows/ci.yml](.github/workflows/ci.yml) |
+| PR CI | validate + 整合性 + 非推奨パターン + version bump + マニフェスト網羅 | [.github/workflows/ci.yml](.github/workflows/ci.yml) |
 | 週次 | 上流参照の実在 + リンク切れ → Issue 起票 | [.github/workflows/freshness.yml](.github/workflows/freshness.yml) |
 | 月次 | 利用状況・意味的ドリフト・仕組み自体の俯瞰レビュー | [.claude/skills/portfolio-review/](.claude/skills/portfolio-review/SKILL.md) |
 

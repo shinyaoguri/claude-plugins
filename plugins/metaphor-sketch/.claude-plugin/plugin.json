@@ -1,7 +1,7 @@
 {
   "name": "metaphor-sketch",
   "description": "metaphor (Swift + Metal クリエイティブコーディング) でスケッチを書く人向け。watch→AI クライアントの起動順序、observe→edit→verify ループ、llms.txt/examples-index の部分参照、環境診断。ライブラリ内の MetaphorPlugin 機構とは無関係。",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "Shinya Oguri"
   },

@@ -1,5 +1,6 @@
 ---
-description: 作業中の気付きを metaphor / metaphor-cli の適切なリポジトリへ Issue 起票
+name: quick-issue
+description: "作業中の気付きを metaphor / metaphor-cli の適切なリポジトリへ Issue 起票"
 argument-hint: "<気付きの内容>"
 ---
 

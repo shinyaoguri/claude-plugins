@@ -1,5 +1,6 @@
 ---
-description: metaphor 環境の診断 (doctor + PATH 混在・MCP 登録・共有セッションの追加検査)
+name: metaphor-doctor
+description: "metaphor 環境の診断 (doctor + PATH 混在・MCP 登録・共有セッションの追加検査)"
 ---
 
 metaphor の実行環境を診断する。`metaphor doctor` に加えて、プラグイン独自の検査を行い、問題ごとに修正方法を提示する。
