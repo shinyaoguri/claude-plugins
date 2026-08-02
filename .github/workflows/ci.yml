@@ -1,0 +1,39 @@
+# PR CI: marketplace/プラグインの validate と整合性検査。
+# チェックの実体は scripts/ にあり、ローカルでも同じものを実行できる。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Claude Code CLI をインストール
+        run: npm install -g @anthropic-ai/claude-code
+      - name: marketplace と各プラグインを validate
+        # ルートの validate では各プラグインの SKILL.md frontmatter 破損を検出できないため、
+        # 必ずプラグインディレクトリごとにも validate する
+        run: |
+          claude plugin validate .
+          for d in plugins/*/; do claude plugin validate "$d"; done
+      - name: marketplace ↔ plugin.json ↔ README の整合
+        run: ./scripts/check-consistency.sh
+      - name: 上流参照のマニフェスト網羅 (upstream-refs.json)
+        run: ./scripts/check-upstream-refs.sh --coverage
+
+  version-bump:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: プラグイン変更時の version bump を検査
+        run: BASE_REF=origin/${{ github.base_ref }} ./scripts/check-version-bump.sh

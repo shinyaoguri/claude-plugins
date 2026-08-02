@@ -1,0 +1,7 @@
+# CI 設定そのものの陳腐化防止: GitHub Actions のバージョンを週次で監視する
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

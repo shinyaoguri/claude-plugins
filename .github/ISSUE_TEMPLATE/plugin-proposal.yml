@@ -1,0 +1,30 @@
+name: プラグイン新設・統廃合の提案
+description: 利用状況にもとづくプラグイン/スキルの新設・統合・廃止・降格の提案
+labels: [plugin-proposal]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 種別
+      options:
+        - 新設
+        - 統合
+        - 廃止
+        - 降格 (特定リポの .claude/skills/ へ)
+        - 昇格 (リポローカルから marketplace へ)
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 根拠となる利用状況
+      description: どのセッション・作業パターン・頻度から提案するか。後から検証できるように具体的に
+    validations:
+      required: true
+  - type: textarea
+    id: content
+    attributes:
+      label: 提案内容
+      description: 対象プラグイン/スキルと、変更後の姿
+    validations:
+      required: true

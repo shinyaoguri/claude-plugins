@@ -1,0 +1,23 @@
+name: ドリフト報告
+description: プラグインの記述と実態 (上流リポ・利用環境) のずれの報告
+labels: [freshness]
+body:
+  - type: input
+    id: source
+    attributes:
+      label: 検知元
+      description: freshness CI / portfolio-review / 手動作業中 など
+    validations:
+      required: true
+  - type: textarea
+    id: drift
+    attributes:
+      label: ずれの内容
+      description: プラグインのどの記述 (ファイル・行) が、実態のどれと食い違っているか
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影響と対処案
+      description: 放置するとどう困るか。修正の方向性 (分かる範囲で)

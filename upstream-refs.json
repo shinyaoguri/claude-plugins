@@ -1,0 +1,50 @@
+{
+  "shinyaoguri/metaphor": [
+    "CONTRACT.md",
+    "CLAUDE.md",
+    "DEVELOPMENT.md",
+    "Makefile",
+    "Package.swift",
+    "llms.txt",
+    "llms-sketch.txt",
+    "contract/",
+    "contract/frame.schema.json",
+    "scripts/check-contract.sh",
+    "scripts/check-contract-schema.sh",
+    "scripts/check-contract-identity.sh",
+    "scripts/validate-ai-docs.sh",
+    "docs/releasing.md",
+    "docs/ai/examples-index.md",
+    "docs/ai/examples-index.json",
+    "docs/ai/prompts/",
+    "Examples/",
+    "Sources/MetaphorCore/Shaders/Metal/",
+    "Sources/MetaphorCore/Probe/",
+    "Sources/MetaphorCore/Shaders/ShaderSources/",
+    "*/SketchRunner.swift",
+    "*/InputInjectionPlugin.swift"
+  ],
+  "shinyaoguri/metaphor-cli": [
+    "CONTRACT.md",
+    "README.md",
+    "AGENTS.md",
+    "DEVELOPMENT.md",
+    "Package.swift",
+    "contract/",
+    "scripts/check-contract.sh",
+    "scripts/check-contract-schema.sh",
+    "scripts/check-contract-identity.sh",
+    "docs/homebrew.md",
+    ".github/workflows/syphon-bump.yml",
+    "*templates.json",
+    "*/MCP/*",
+    "*/MCPCommand.swift",
+    "*/ViewerWatch.swift",
+    "*/ViewerWindow.swift",
+    "*/SyphonFrameSource.swift",
+    "*/SharedSession.swift"
+  ],
+  "shinyaoguri/homebrew-tap": [
+    "*metaphor.rb"
+  ]
+}
