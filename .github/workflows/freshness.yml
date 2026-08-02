@@ -56,7 +56,10 @@ jobs:
             echo "workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } > issue-body.md
           gh label create freshness --description "陳腐化・ドリフトの検知/報告" --color C2E0C6 --force
-          existing=$(gh issue list --label freshness --state open --json number --jq '.[0].number // empty')
+          # 相乗り防止: 自動レポート Issue (タイトル完全一致) だけを重複判定の対象にする。
+          # label:freshness 全体でマッチさせると、手動起票のドリフト報告に週次レポートが追記されてしまう
+          existing=$(gh issue list --label freshness --state open --json number,title \
+            --jq '[.[] | select(.title == "freshness: 週次チェックがドリフトを検知")][0].number // empty')
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body-file issue-body.md
           else
