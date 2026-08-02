@@ -1,5 +1,6 @@
 ---
-description: metaphor スケッチプロジェクトを対話的に作成 (テンプレート推薦つき)
+name: metaphor-new
+description: "metaphor スケッチプロジェクトを対話的に作成 (テンプレート推薦つき)"
 argument-hint: "[name] [--template <id>]"
 ---
 

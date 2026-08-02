@@ -1,5 +1,6 @@
 ---
-description: metaphor ⇄ metaphor-cli のクロスリポ契約チェックを実行し、結果と次アクションを提示
+name: contract-check
+description: "metaphor ⇄ metaphor-cli のクロスリポ契約チェックを実行し、結果と次アクションを提示"
 ---
 
 metaphor ⇄ metaphor-cli のクロスリポ契約を検証する。
