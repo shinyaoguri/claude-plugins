@@ -1,0 +1,21 @@
+name: 改善提案
+description: 仕組み・プラグイン・ドキュメントの改善アイデア (気付いたら作業を止めずに即起票)
+labels: [improvement]
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景・きっかけ
+      description: どの作業・セッションで何に気付いたか。メモリがリセットされても文脈を復元できるように書く
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案内容
+    validations:
+      required: true
+  - type: textarea
+    id: effect
+    attributes:
+      label: 期待効果・放置した場合のリスク
