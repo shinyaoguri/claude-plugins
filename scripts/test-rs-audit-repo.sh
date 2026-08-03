@@ -83,6 +83,3 @@ if [ "$failures" -gt 0 ]; then
   exit 1
 fi
 echo "OK"
-
-# 一時検証: guardrail ジョブのコメント経路の実証 (直後に戻す)
-true || true
