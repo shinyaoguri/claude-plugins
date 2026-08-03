@@ -1,7 +1,13 @@
-# CI 設定そのものの陳腐化防止: GitHub Actions のバージョンを週次で監視する
+# CI 設定そのものの陳腐化防止: GitHub Actions のバージョンを週次で監視する。
+# patch/minor は dependabot-auto-merge.yml が自動マージする (ADR 0005)。
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    # PR タイトルは scripts/check-pr-title.sh (Conventional Commits) を通す必要がある。
+    # 未指定だと Dependabot はコミット履歴からの推測で prefix を決めるため、明示して固定する
+    # (推測が外れると pr-policy が落ち、自動マージが恒久的に止まる)
+    commit-message:
+      prefix: build

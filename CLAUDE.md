@@ -32,6 +32,7 @@
 |---|---|---|
 | PR CI | validate + 整合性 + 非推奨パターン + version bump + マニフェスト網羅 | [.github/workflows/ci.yml](.github/workflows/ci.yml) |
 | 週次 | 上流参照の実在 + リンク切れ → Issue 起票 | [.github/workflows/freshness.yml](.github/workflows/freshness.yml) |
+| 週次 | GitHub Actions の更新 (patch/minor は CI green で自動マージ、major は `manual-review` ラベル) | [.github/workflows/dependabot-auto-merge.yml](.github/workflows/dependabot-auto-merge.yml) (ADR [0005](docs/decisions/0005-dependabot-auto-merge.md)) |
 | 月次 | 利用状況・意味的ドリフト・仕組み自体の俯瞰レビュー | [.claude/skills/portfolio-review/](.claude/skills/portfolio-review/SKILL.md) |
 
 同種の問題・手戻りが 2 回起きたら、文書ルールの追記でなく仕組み (CI・hooks・スクリプト) への昇格を検討して Issue 起票する。
