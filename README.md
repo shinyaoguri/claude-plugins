@@ -8,6 +8,7 @@
 |---|---|---|
 | [metaphor-sketch](plugins/metaphor-sketch) | [metaphor](https://github.com/shinyaoguri/metaphor) でスケッチを書く人 | 観測ループ (observe→edit→verify) と watch→AI クライアントの起動順序の作法、`/metaphor-new` `/metaphor-doctor` (skill 4)、watch セッション検査 (SessionStart hook 1) |
 | [metaphor-contrib](plugins/metaphor-contrib) | [metaphor](https://github.com/shinyaoguri/metaphor) / [metaphor-cli](https://github.com/shinyaoguri/metaphor-cli) のコントリビュータ | クロスリポ契約・生成物の鮮度・リリース規約・CLI 拡張手順、`/contract-check` `/quick-issue` (skill 6) |
+| [repo-standards](plugins/repo-standards) | 自分の全リポジトリと各マシン | 個人標準 ([setup](https://github.com/shinyaoguri/setup) の repo-standards.json が正本) との突き合わせ監査・修正・雛形生成、`/repo-audit` `/env-doctor` `/repo-bootstrap` (skill 3) |
 
 いずれも対象リポジトリの正典ドキュメント (CLAUDE.md / AGENTS.md / DEVELOPMENT.md / CONTRACT.md) を複製せず、「いつ・何を読むか」を想起させる薄いルーターとして設計している (ドリフト防止)。
 
