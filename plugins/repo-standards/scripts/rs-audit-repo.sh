@@ -75,10 +75,18 @@ builtin_license_exists() {
   echo fail
 }
 
+# ディレクトリだけ作って空のまま放置されると記録の実体が無いので、ADR 本体が
+# 1 件以上あることまで見る。README.md は索引なので ADR としては数えない
 builtin_adr_exists() {
   local p
   for p in docs/decisions docs/adr docs/architecture-decisions; do
-    [ -d "$p" ] && { echo ok; return; }
+    [ -d "$p" ] || continue
+    if [ -n "$(find "$p" -maxdepth 1 -type f -name '*.md' ! -name 'README.md' -print -quit 2>/dev/null)" ]; then
+      echo ok
+    else
+      echo "fail:$p はあるが ADR が 1 件も無い"
+    fi
+    return
   done
   echo fail
 }
