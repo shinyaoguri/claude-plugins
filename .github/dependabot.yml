@@ -6,6 +6,12 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    # リリース公開から PR 起票までの待機。既定でも 3 日待つが、自動マージを入れた以上は
+    # 「人の目を通らずに main へ入る」ため、悪意あるリリースが取り下げられる猶予を伸ばす。
+    # 週次スケジュールなので実質の遅延はほぼない。security update には適用されない
+    # (脆弱性公表時は cooldown を無視して即座に PR が出る)
+    cooldown:
+      default-days: 7
     # PR タイトルは scripts/check-pr-title.sh (Conventional Commits) を通す必要がある。
     # 未指定だと Dependabot はコミット履歴からの推測で prefix を決めるため、明示して固定する
     # (推測が外れると pr-policy が落ち、自動マージが恒久的に止まる)
