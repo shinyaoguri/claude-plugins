@@ -17,8 +17,9 @@ fail=0
 
 # 上流ドキュメント・実装ファイルを指す典型トークン。プラグインの語彙が増えたらここも育てる
 token_re='(CONTRACT\.md|AGENTS\.md|DEVELOPMENT\.md|CLAUDE\.md|llms[a-z-]*\.txt|examples-index\.(md|json)|docs/ai/[A-Za-z0-9._/-]+|docs/[a-z-]+\.md|scripts/[A-Za-z0-9_-]+\.sh|check-contract[a-z-]*\.sh|[A-Za-z][A-Za-z0-9]*\.swift|[a-z.-]+\.schema\.json|templates\.json|syphon-bump\.yml|ShaderSources|Shaders/Metal)'
-# metaphor new が各プロジェクトに生成するファイル等、上流リポの実体ではないトークン
-ignore_re='^(PROJECT_BRIEF\.md|App\.swift)$'
+# metaphor new が各プロジェクトに生成するファイル等、上流リポの実体ではないトークンと、
+# プラグイン同梱スクリプト (rs- プレフィックス。repo-standards の ${CLAUDE_PLUGIN_ROOT}/scripts/)
+ignore_re='^(PROJECT_BRIEF\.md|App\.swift|scripts/rs-[a-z-]+\.sh)$'
 
 coverage() {
   local entries tokens t hit e
