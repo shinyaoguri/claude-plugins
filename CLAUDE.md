@@ -13,6 +13,7 @@
 - `claude plugin validate` は**各プラグインディレクトリに対して**実行する。ルートへの validate は marketplace.json しか見ず、SKILL.md frontmatter の YAML 破損を検出できない
 - SKILL.md の frontmatter description は必ずクォートする (裸の `: ` が混ざると YAML パースが落ち、メタデータ全体が無視される)
 - CI と同じチェックはローカルで `scripts/check-consistency.sh` / `scripts/check-deprecated-patterns.sh` / `scripts/check-version-bump.sh` / `scripts/check-upstream-refs.sh --coverage` として実行できる
+- プラグイン同梱スクリプトの判定ロジックは `scripts/test-rs-audit-repo.sh` でテストする。一時 git リポと最小 manifest を組み立て、出力 (JSON Lines) の status を検証するエンドツーエンド方式 (正本との出力契約ごと守るため、関数を source しない)
 
 ## バージョン規約 (ADR [0003](docs/decisions/0003-version-policy.md))
 
