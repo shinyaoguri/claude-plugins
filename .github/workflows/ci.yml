@@ -89,3 +89,14 @@ jobs:
             grep '^WEAKENING:' /tmp/guardrail.txt
             echo '```'
           } | gh pr comment "$PR" --body-file -
+      - name: 検出が解消されたらラベルを外す
+        if: steps.check.outputs.found == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # 付いていないラベルを外そうとするとエラーになるので、有無を見てから外す
+          if gh pr view "$PR" --json labels --jq '.labels[].name' | grep -qx guardrail-change; then
+            gh pr edit "$PR" --remove-label guardrail-change
+            echo "指摘が解消されたのでラベルを外した"
+          fi
