@@ -35,7 +35,7 @@ jobs:
 
       - name: 更新種別を取得
         id: meta
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
 
       - name: ラベルを用意
         run: |
