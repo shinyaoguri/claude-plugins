@@ -1,0 +1,82 @@
+# Dependabot PR の自動マージ (ADR 0005)。
+#
+# 「問題ないか」の判定そのものは ruleset main-protection の required status checks
+# (validate / pr-policy) に委ねる。GitHub の auto-merge はそれらが green になるまで
+# 待ってから squash merge するため、ここが担うのは次の 2 点だけ:
+#   1. 対象を semver patch/minor に絞る (major は互換性判断が要るので人が見る)
+#   2. PR CI では走らない freshness.yml の試走 (下記)
+#
+# 更新対象が github-actions のみなので、PR CI は「更新された action 自身」で走る。
+# つまり validate/pr-policy の green は、その action の新バージョンで実際に動いた
+# 実証を兼ねる。ただし freshness.yml は schedule/workflow_dispatch でしか起動せず
+# PR CI に載らないため、そこに差分がある PR だけ明示的に試走させる。
+name: Dependabot auto-merge
+
+on: pull_request
+
+# Dependabot がトリガーした run の GITHUB_TOKEN は既定で read-only。ここで昇格する
+permissions:
+  contents: write # auto-merge の有効化
+  pull-requests: write # ラベル付与
+  actions: write # freshness.yml の workflow_dispatch
+
+jobs:
+  auto-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: 更新種別を取得
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+
+      - name: ラベルを用意
+        run: |
+          gh label create "manual-review" --description "自動マージ対象外: 人のレビューが必要" --color D93F0B --force
+
+      - name: major bump は自動マージしない
+        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        run: |
+          echo "major bump (${{ steps.meta.outputs.dependency-names }}) のため自動マージ対象外"
+          gh pr edit "$PR_URL" --add-label "manual-review"
+
+      # freshness.yml の action 更新は PR CI に載らないため、ここで PR ブランチの内容を
+      # そのまま実行して確認する。副作用として実データのドリフトがあれば Issue が起票され
+      # 赤くなるが、週次実行でどのみち起票されるものなので許容する (人が見る合図にもなる)
+      - name: freshness.yml に差分があれば PR ブランチで試走
+        id: freshness
+        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        run: |
+          if git diff --quiet "origin/${{ github.base_ref }}" -- .github/workflows/freshness.yml; then
+            echo "OK: freshness.yml に差分なし (試走不要)"
+            exit 0
+          fi
+          echo "freshness.yml に差分あり: PR ブランチで試走する"
+          before=$(gh run list --workflow=freshness.yml --branch "$HEAD_REF" --limit 1 --json databaseId --jq '.[0].databaseId // 0')
+          gh workflow run freshness.yml --ref "$HEAD_REF"
+          id="$before"
+          for _ in $(seq 1 24); do
+            sleep 5
+            id=$(gh run list --workflow=freshness.yml --branch "$HEAD_REF" --limit 1 --json databaseId --jq '.[0].databaseId // 0')
+            [ "$id" != "$before" ] && break
+          done
+          if [ "$id" = "$before" ]; then
+            echo "NG: 試走した run を 2 分以内に特定できなかった" >&2
+            exit 1
+          fi
+          gh run watch "$id" --exit-status
+
+      - name: 試走が失敗したら手動レビューへ回す
+        if: failure() && steps.freshness.outcome == 'failure'
+        run: gh pr edit "$PR_URL" --add-label "manual-review"
+
+      - name: auto-merge を有効化 (required checks 通過後に squash merge される)
+        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge --auto --squash "$PR_URL"
