@@ -21,8 +21,18 @@ while IFS=$'\t' read -r kid marker; do
 done < <(jq -r '.kinds[] | [.id, (.marker // "__null__")] | @tsv' "$manifest")
 [ -n "$kind" ] || kind=${fallback:-generic}
 
-jq -cn --arg kind "$kind" --arg root "$root" --arg manifest "$manifest" \
-  '{id:"_meta",layer:"repo",kind:$kind,root:$root,manifest:$manifest}'
+# when.visibility を評価するために可視性を引く。gh が無ければ "unknown" とし、
+# 可視性を条件にした項目だけを skip する (層全体は gh 無しでも動き続ける)
+visibility=unknown
+if command -v gh >/dev/null 2>&1; then
+  case "$(gh repo view --json isPrivate --jq .isPrivate 2>/dev/null)" in
+    true) visibility=private ;;
+    false) visibility=public ;;
+  esac
+fi
+
+jq -cn --arg kind "$kind" --arg root "$root" --arg vis "$visibility" --arg manifest "$manifest" \
+  '{id:"_meta",layer:"repo",kind:$kind,root:$root,visibility:$vis,manifest:$manifest}'
 
 # ---- builtin 検査 (正本の check.name から呼ばれる) ----
 
@@ -48,6 +58,133 @@ builtin_settings_local_not_committed() {
   fi
 }
 
+# workflow ファイルの一覧 (.yml / .yaml 両対応。片方だけの glob では取りこぼす)
+workflow_files() {
+  find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null
+}
+
+builtin_ci_workflow_exists() {
+  [ -n "$(workflow_files)" ] && echo ok || echo fail
+}
+
+builtin_license_exists() {
+  local p
+  for p in LICENSE LICENSE.md LICENSE.txt COPYING; do
+    [ -f "$p" ] && { echo ok; return; }
+  done
+  echo fail
+}
+
+builtin_adr_exists() {
+  local p
+  for p in docs/decisions docs/adr docs/architecture-decisions; do
+    [ -d "$p" ] && { echo ok; return; }
+  done
+  echo fail
+}
+
+# CHANGELOG はリリースするリポだけの関心事なので、タグが無ければ対象外
+builtin_changelog_exists() {
+  [ -n "$(git tag 2>/dev/null | head -1)" ] || { echo "skip:タグが無い (リリースしないリポは対象外)"; return; }
+  local p
+  for p in CHANGELOG.md CHANGELOG docs/CHANGELOG.md; do
+    [ -f "$p" ] && { echo ok; return; }
+  done
+  echo fail
+}
+
+# テストの置き場は言語ごとに違い、Web 系はソースと同じ場所に *.test.ts を置くことも多い。
+# ディレクトリとファイル名の両方を見ないと取りこぼす
+builtin_test_dir_exists() {
+  local p
+  for p in Tests test tests spec __tests__ src/test src/tests; do
+    [ -d "$p" ] && { echo ok; return; }
+  done
+  git ls-files 2>/dev/null \
+    | grep -qiE '(^|/)(test_[^/]+\.py|[^/]+_test\.(py|go|ts|js|rb)|[^/]+\.(test|spec)\.(ts|tsx|js|jsx|mjs)|[^/]*Tests?\.swift)$' \
+    && { echo ok; return; }
+  echo fail
+}
+
+# テストディレクトリがあっても CI で呼ばれていなければ「置いてあるだけ」になる
+# (setup リポ issue #36 の実例: 手元でしか流さず 1 件赤いまま数日放置された)
+builtin_tests_run_in_ci() {
+  [ "$(builtin_test_dir_exists)" = ok ] || { echo "skip:テストディレクトリが無いため対象外"; return; }
+  local files
+  files=$(workflow_files)
+  [ -n "$files" ] || { echo "skip:CI workflow が無いため対象外"; return; }
+  # 代表的なテスト実行コマンド。言語が増えたらここも育てる
+  if grep -qhE '(swift test|npm (run )?test|pnpm (run )?test|yarn test|pytest|unittest|go test|cargo test|bun test|vitest|jest)' $files; then
+    echo ok
+  else
+    echo fail
+  fi
+}
+
+builtin_pr_title_lint_configured() {
+  local files
+  files=$(workflow_files)
+  [ -n "$files" ] || { echo "skip:CI workflow が無いため対象外"; return; }
+  if grep -qhiE '(pr-title|pr_title|PR_TITLE|conventional|commitlint|semantic-pull-request)' $files; then
+    echo ok
+  else
+    echo fail
+  fi
+}
+
+# 週次・月次で上流や依存のドリフトを拾う仕組み (schedule トリガ) があるか
+builtin_scheduled_workflow_exists() {
+  local files
+  files=$(workflow_files)
+  [ -n "$files" ] || { echo "skip:CI workflow が無いため対象外"; return; }
+  grep -qhE '^\s*schedule:' $files && echo ok || echo fail
+}
+
+# GitHub Flow「main が唯一の長命ブランチ」の検査。作業中ブランチと区別がつかないため
+# 最終コミットから 30 日以上動いていないものだけを残骸とみなす
+builtin_no_stale_branches() {
+  local now cutoff stale b ts
+  now=$(date +%s); cutoff=$((now - 30 * 86400)); stale=""
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    ts=$(git log -1 --format=%ct "$b" 2>/dev/null) || continue
+    [ "$ts" -lt "$cutoff" ] && stale="$stale ${b#origin/}"
+  done < <(git branch -r 2>/dev/null | tr -d ' ' | grep -vE '^origin/(HEAD|main|master)' )
+  [ -z "$stale" ] && { echo ok; return; }
+  echo "fail:30 日以上更新の無いリモートブランチ:$stale"
+}
+
+# 秘密ファイルが追跡対象に入っていないか。履歴の書き換えは不可逆なので検出のみ
+builtin_no_committed_secrets() {
+  local hits
+  hits=$(git ls-files 2>/dev/null | grep -iE '(^|/)(\.env(\.[a-z]+)?|.*\.pem|.*\.p12|.*\.key|id_rsa|.*\.keystore|.*credentials\.json)$' \
+    | grep -viE '(\.env\.(example|sample|template)|\.lock)' | head -5)
+  [ -z "$hits" ] && { echo ok; return; }
+  echo "fail:追跡中の秘密ファイル候補: $(tr '\n' ' ' <<<"$hits")"
+}
+
+# 使い終わった worktree の残骸。~/.claude/ の symlink が worktree を指す事故の温床でもある
+builtin_worktrees_clean() {
+  [ -d .claude/worktrees ] || { echo ok; return; }
+  local dirs registered orphan
+  registered=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}')
+  orphan=""
+  for dirs in .claude/worktrees/*/; do
+    [ -d "$dirs" ] || continue
+    dirs=${dirs%/}
+    printf '%s\n' "$registered" | grep -qF "$(cd "$dirs" && pwd)" || orphan="$orphan $(basename "$dirs")"
+  done
+  local n
+  n=$(git worktree list --porcelain 2>/dev/null | grep -c '^worktree ' || echo 0)
+  if [ -n "$orphan" ]; then
+    echo "fail:git に登録されていない worktree ディレクトリ:$orphan"
+  elif [ "$n" -gt 3 ]; then
+    echo "fail:worktree が $((n - 1)) 個ある (使い終わったものは git worktree remove で掃除する)"
+  else
+    echo ok
+  fi
+}
+
 # ---- 項目ループ ----
 
 while IFS= read -r item; do
@@ -61,6 +198,17 @@ while IFS= read -r item; do
   # リポ種別のフィルタ
   if ! jq -e --arg k "$kind" '.applies_to | index("all") or index($k)' >/dev/null <<<"$item"; then
     emit "$id" "$layer" "$level" skip "リポ種別 $kind は対象外"
+    continue
+  fi
+
+  # 可視性の条件 (when.visibility)
+  want_vis=$(jq -r '.when.visibility // ""' <<<"$item")
+  if [ -n "$want_vis" ] && [ "$want_vis" != "$visibility" ]; then
+    if [ "$visibility" = unknown ]; then
+      emit "$id" "$layer" "$level" skip "$want_vis リポのみ対象だが可視性を判定できない (gh 未認証)"
+    else
+      emit "$id" "$layer" "$level" skip "$want_vis リポのみ対象 (このリポは $visibility)"
+    fi
     continue
   fi
 
@@ -90,6 +238,8 @@ while IFS= read -r item; do
       case "$result" in
         ok) emit "$id" "$layer" "$level" ok "" ;;
         skip:*) emit "$id" "$layer" "$level" skip "${result#skip:}" ;;
+        # fail:<詳細> は検査が具体的な違反箇所を掴んでいる場合 (どのブランチ・どのファイルか)
+        fail:*) emit "$id" "$layer" "$level" "$(fail_status "$level")" "${result#fail:} — $why" "$fix" ;;
         *) emit "$id" "$layer" "$level" "$(fail_status "$level")" "$why" "$fix" ;;
       esac
       ;;

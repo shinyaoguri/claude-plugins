@@ -99,6 +99,46 @@ builtin_actions_default_permissions_read() {
   [ "$perm" = "read" ] && echo ok || echo fail
 }
 
+builtin_main_signatures_required() {
+  has_rule required_signatures && echo ok || echo fail
+}
+
+builtin_main_linear_history() {
+  has_rule required_linear_history && echo ok || echo fail
+}
+
+# タグを打つリポだけの関心事。リリース済みタグの改変・削除を止める
+builtin_tag_protection() {
+  gh api "repos/$repo/tags" --jq '.[0].name' >/dev/null 2>&1 || { echo "skip:取得できない"; return; }
+  [ -n "$(gh api "repos/$repo/tags" --jq '.[0].name' 2>/dev/null)" ] \
+    || { echo "skip:タグが無い (リリースしないリポは対象外)"; return; }
+  local rids rs rid
+  rids=$(gh api "repos/$repo/rulesets" --jq '.[] | select(.enforcement == "active") | .id' 2>/dev/null) || rids=""
+  for rid in $rids; do
+    rs=$(gh api "repos/$repo/rulesets/$rid" 2>/dev/null) || continue
+    [ "$(jq -r .target <<<"$rs")" = "tag" ] || continue
+    if jq -e '[.rules[].type] | index("deletion") and index("non_fast_forward")' >/dev/null <<<"$rs"; then
+      echo ok; return
+    fi
+  done
+  echo fail
+}
+
+# ブランチ命名規約 (<type>/<説明>) の GitHub 側での強制。
+# 注意: bot と Claude Code のブランチを許可しないと PR が作れなくなる
+# (dependabot/... と claude/... は実在する。fix の正規表現に含める)
+builtin_branch_name_pattern() {
+  local rids rs rid
+  rids=$(gh api "repos/$repo/rulesets" --jq '.[] | select(.enforcement == "active") | .id' 2>/dev/null) || rids=""
+  for rid in $rids; do
+    rs=$(gh api "repos/$repo/rulesets/$rid" 2>/dev/null) || continue
+    if jq -e '[.rules[].type] | index("branch_name_pattern")' >/dev/null <<<"$rs"; then
+      echo ok; return
+    fi
+  done
+  echo fail
+}
+
 # ---- 項目ループ ----
 
 while IFS= read -r item; do
@@ -145,6 +185,8 @@ while IFS= read -r item; do
       case "$result" in
         ok) emit "$id" github "$level" ok "" ;;
         skip:*) emit "$id" github "$level" skip "${result#skip:}" ;;
+        # fail:<詳細> は検査が具体的な違反箇所を掴んでいる場合
+        fail:*) emit "$id" github "$level" "$(fail_status "$level")" "${result#fail:} — $why" "$fix" ;;
         *) emit "$id" github "$level" "$(fail_status "$level")" "$why" "$fix" ;;
       esac
       ;;
