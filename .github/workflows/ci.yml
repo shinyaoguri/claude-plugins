@@ -49,3 +49,54 @@ jobs:
         run: ./scripts/check-pr-title.sh
       - name: version bump の検査 (タイトル type / release:* ラベルから期待増分を導出)
         run: BASE_REF=origin/${{ github.base_ref }} ./scripts/check-version-bump.sh
+
+  # 守り (テスト・CI・チェックスクリプト) を弱める変更の可視化。
+  # 意図的に緩めることはあるのでブロックせず、ラベルとコメントで必ず目に入るようにする
+  # (経緯は Issue #18)。他のジョブと分けてあるのは、失敗させない性質が違うため
+  guardrail:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: check
+        name: 守りを弱める変更の検知
+        run: BASE_REF=origin/${{ github.base_ref }} ./scripts/check-guardrail-weakening.sh | tee /tmp/guardrail.txt
+      - name: 検出内容を PR に可視化する
+        if: steps.check.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr edit "$PR" --add-label guardrail-change
+          marker='<!-- guardrail-weakening -->'
+          # 同じ PR に push するたびコメントが増えないよう、初回だけ投稿する
+          if gh pr view "$PR" --json comments --jq '.comments[].body' | grep -qF "$marker"; then
+            echo "既にコメント済み"
+            exit 0
+          fi
+          {
+            echo "$marker"
+            echo '### 守りを弱める変更を検出しました'
+            echo
+            echo 'テスト・CI・チェックスクリプトを削る変更が含まれています。**マージはブロックしません**が、意図的なら PR 本文に理由を書いてください。'
+            echo
+            echo '```'
+            grep '^WEAKENING:' /tmp/guardrail.txt
+            echo '```'
+          } | gh pr comment "$PR" --body-file -
+      - name: 検出が解消されたらラベルを外す
+        if: steps.check.outputs.found == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # 付いていないラベルを外そうとするとエラーになるので、有無を見てから外す
+          if gh pr view "$PR" --json labels --jq '.labels[].name' | grep -qx guardrail-change; then
+            gh pr edit "$PR" --remove-label guardrail-change
+            echo "指摘が解消されたのでラベルを外した"
+          fi
