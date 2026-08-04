@@ -142,6 +142,7 @@ while IFS= read -r item; do
   why=$(jq -r .why <<<"$item")
   fix=$(jq -r '.fix // ""' <<<"$item")
   fix=${fix//\{repo\}/$repo}
+  fix_kind=$(jq -r '.fix_kind // ""' <<<"$item")
   ctype=$(jq -r .check.type <<<"$item")
 
   # 可視性の条件 (when.visibility) が合わない項目は対象外
@@ -167,7 +168,7 @@ while IFS= read -r item; do
       if [ "$actual" = "$expect" ]; then
         emit "$id" github "$level" ok "値: $actual"
       else
-        emit "$id" github "$level" "$(fail_status "$level")" "期待 $expect / 実際 $actual — $why" "$fix"
+        emit "$id" github "$level" "$(fail_status "$level")" "期待 $expect / 実際 $actual — $why" "$fix" "$fix_kind"
       fi
       ;;
     builtin)
@@ -181,8 +182,8 @@ while IFS= read -r item; do
         ok) emit "$id" github "$level" ok "" ;;
         skip:*) emit "$id" github "$level" skip "${result#skip:}" ;;
         # fail:<詳細> は検査が具体的な違反箇所を掴んでいる場合
-        fail:*) emit "$id" github "$level" "$(fail_status "$level")" "${result#fail:} — $why" "$fix" ;;
-        *) emit "$id" github "$level" "$(fail_status "$level")" "$why" "$fix" ;;
+        fail:*) emit "$id" github "$level" "$(fail_status "$level")" "${result#fail:} — $why" "$fix" "$fix_kind" ;;
+        *) emit "$id" github "$level" "$(fail_status "$level")" "$why" "$fix" "$fix_kind" ;;
       esac
       ;;
     *)

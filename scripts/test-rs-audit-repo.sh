@@ -133,6 +133,44 @@ assert warn "テストはあるが CI で実行していない" \
 check_id=adr-exists
 
 echo
+echo "正本の fix_kind を素通しする (修正側の承認粒度を決める契約):"
+
+# 正本がまだ持たない項目では落ちる / 持つ項目ではそのまま載る、の両方を固定する
+fk_dir="$tmp/fix-kind"
+mkdir -p "$fk_dir"
+cat > "$fk_dir/m.json" <<'EOF'
+{
+  "version": 1,
+  "kinds": [{ "id": "generic", "marker": null }],
+  "items": [
+    { "id": "with-kind", "layer": "repo", "level": "required", "applies_to": ["all"],
+      "check": { "type": "file_exists", "path": "README.md" },
+      "why": "テスト用", "fix": "テスト用", "fix_kind": "generative" },
+    { "id": "without-kind", "layer": "repo", "level": "required", "applies_to": ["all"],
+      "check": { "type": "file_exists", "path": "README.md" },
+      "why": "テスト用", "fix": "テスト用" }
+  ]
+}
+EOF
+mkdir -p "$fk_dir/repo"
+( cd "$fk_dir/repo" && git init -q -b main ) >/dev/null 2>&1
+out=$( cd "$fk_dir/repo" && REPO_STANDARDS_JSON="$fk_dir/m.json" bash "$target" )
+got=$(jq -r 'select(.id == "with-kind") | .fix_kind // "-"' <<<"$out")
+if [ "$got" = "generative" ]; then
+  echo "  [ok]   fix_kind がある項目は素通しする → $got"
+else
+  echo "  [FAIL] fix_kind がある項目 → 期待 generative / 実際 $got"
+  failures=$((failures + 1))
+fi
+got=$(jq -r 'select(.id == "without-kind") | has("fix_kind")' <<<"$out")
+if [ "$got" = "false" ]; then
+  echo "  [ok]   fix_kind が無い項目には付けない → 出力に無い"
+else
+  echo "  [FAIL] fix_kind が無い項目 → 期待 false / 実際 $got"
+  failures=$((failures + 1))
+fi
+
+echo
 echo "前提不足時の報告 (出力契約の範囲内で):"
 
 # git リポ外でも契約内の status/level で報告する (#34 で塞いだ穴: error/- を出していた)

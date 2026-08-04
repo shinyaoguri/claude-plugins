@@ -202,6 +202,7 @@ while IFS= read -r item; do
   level=$(jq -r .level <<<"$item")
   why=$(jq -r .why <<<"$item")
   fix=$(jq -r '.fix // ""' <<<"$item")
+  fix_kind=$(jq -r '.fix_kind // ""' <<<"$item")
   ctype=$(jq -r .check.type <<<"$item")
 
   # リポ種別のフィルタ
@@ -225,17 +226,17 @@ while IFS= read -r item; do
     file_exists)
       path=$(jq -r .check.path <<<"$item")
       if [ -e "$path" ]; then emit "$id" "$layer" "$level" ok "$path"
-      else emit "$id" "$layer" "$level" "$(fail_status "$level")" "$path が無い — $why" "$fix"; fi
+      else emit "$id" "$layer" "$level" "$(fail_status "$level")" "$path が無い — $why" "$fix" "$fix_kind"; fi
       ;;
     file_absent)
       path=$(jq -r .check.path <<<"$item")
       if [ ! -e "$path" ]; then emit "$id" "$layer" "$level" ok "$path は無い (期待どおり)"
-      else emit "$id" "$layer" "$level" "$(fail_status "$level")" "$path が存在する — $why" "$fix"; fi
+      else emit "$id" "$layer" "$level" "$(fail_status "$level")" "$path が存在する — $why" "$fix" "$fix_kind"; fi
       ;;
     glob_exists)
       pattern=$(jq -r .check.path <<<"$item")
       if compgen -G "$pattern" >/dev/null; then emit "$id" "$layer" "$level" ok "$pattern に一致あり"
-      else emit "$id" "$layer" "$level" "$(fail_status "$level")" "$pattern に一致なし — $why" "$fix"; fi
+      else emit "$id" "$layer" "$level" "$(fail_status "$level")" "$pattern に一致なし — $why" "$fix" "$fix_kind"; fi
       ;;
     builtin)
       name=$(jq -r .check.name <<<"$item")
@@ -248,13 +249,13 @@ while IFS= read -r item; do
         ok) emit "$id" "$layer" "$level" ok "" ;;
         skip:*) emit "$id" "$layer" "$level" skip "${result#skip:}" ;;
         # fail:<詳細> は検査が具体的な違反箇所を掴んでいる場合 (どのブランチ・どのファイルか)
-        fail:*) emit "$id" "$layer" "$level" "$(fail_status "$level")" "${result#fail:} — $why" "$fix" ;;
-        *) emit "$id" "$layer" "$level" "$(fail_status "$level")" "$why" "$fix" ;;
+        fail:*) emit "$id" "$layer" "$level" "$(fail_status "$level")" "${result#fail:} — $why" "$fix" "$fix_kind" ;;
+        *) emit "$id" "$layer" "$level" "$(fail_status "$level")" "$why" "$fix" "$fix_kind" ;;
       esac
       ;;
     llm)
       prompt=$(jq -r .check.prompt <<<"$item")
-      emit "$id" "$layer" "$level" manual "$prompt" "$fix"
+      emit "$id" "$layer" "$level" manual "$prompt" "$fix" "$fix_kind"
       ;;
     *)
       emit "$id" "$layer" "$level" skip "check.type '$ctype' はこのスクリプトの対象外"

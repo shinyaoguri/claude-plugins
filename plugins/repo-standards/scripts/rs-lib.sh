@@ -12,6 +12,9 @@
 #         / skip (対象外・前提不足。理由を detail に) / manual (LLM 判定へ委譲)
 # スクリプトはレポートツールでありゲートではない。チェック結果がどうであれ exit 0 を保ち、
 # スクリプト自体の異常 (jq 不在など) のみ非 0 で落ちる。
+#
+# この JSON Lines を保存し、LLM 判定 (verdict) と適用判断 (decision) を足して
+# 監査 → 修正へ引き渡すのが rs-findings.sh。行スキーマの拡張分はそちらの冒頭を参照。
 
 resolve_standards() {
   local p
@@ -21,12 +24,16 @@ resolve_standards() {
   return 1
 }
 
-# emit <id> <layer> <level> <status> <detail> [fix]
+# emit <id> <layer> <level> <status> <detail> [fix] [fix_kind]
+# fix_kind は修正の性質 (deterministic / generative / destructive) を正本が宣言するための
+# 任意フィールド。修正側 (repo-audit-fix) の承認粒度がこれで決まる。正本がまだ持たない
+# 項目では空になり出力から落ちる — 値の妥当性は正本側のテストが守る (ADR 0006 と同じ契約)
 emit() {
   jq -cn --arg id "$1" --arg layer "$2" --arg level "$3" --arg status "$4" \
-    --arg detail "$5" --arg fix "${6:-}" \
+    --arg detail "$5" --arg fix "${6:-}" --arg fix_kind "${7:-}" \
     '{id:$id,layer:$layer,level:$level,status:$status,detail:$detail}
-     + (if $fix != "" then {fix:$fix} else {} end)'
+     + (if $fix != "" then {fix:$fix} else {} end)
+     + (if $fix_kind != "" then {fix_kind:$fix_kind} else {} end)'
 }
 
 # 検査失敗時の status を level から導く (required → ng / recommended・rejected → warn)
