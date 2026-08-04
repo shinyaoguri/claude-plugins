@@ -78,6 +78,21 @@ assert warn "サブディレクトリの .md のみ" \
   bash -c 'mkdir -p docs/decisions/drafts && echo "# 草案" > docs/decisions/drafts/0001-x.md'
 
 echo
+echo "前提不足時の報告 (出力契約の範囲内で):"
+
+# git リポ外でも契約内の status/level で報告する (#34 で塞いだ穴: error/- を出していた)
+dir="$tmp/not-a-repo"
+mkdir -p "$dir"
+line=$( cd "$dir" && REPO_STANDARDS_JSON="$manifest" bash "$target" \
+  | jq -c 'select(.id == "not-a-git-repo")' )
+if [ "$(jq -r .status <<<"$line")" = "ng" ] && [ "$(jq -r .level <<<"$line")" = "required" ]; then
+  echo "  [ok]   git リポ外 → required/ng で報告"
+else
+  echo "  [FAIL] git リポ外 → 期待 required/ng / 実際 $(jq -r '"\(.level)/\(.status)"' <<<"$line")"
+  failures=$((failures + 1))
+fi
+
+echo
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures 件"
   exit 1
