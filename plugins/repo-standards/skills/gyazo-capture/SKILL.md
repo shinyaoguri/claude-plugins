@@ -1,6 +1,6 @@
 ---
 name: gyazo-capture
-description: "GUI を伴う作業 (画面・見た目・操作手順) を Issue・PR・ドキュメントに記録するとき、スクリーンショットを Gyazo にアップロードして URL を得る。Use when attaching a screenshot to an issue, PR, or doc, or when a visual record of an app, browser, or screen is needed."
+description: "GUI を伴う作業 (画面・見た目・操作手順) を Issue・PR に記録するとき、スクリーンショットを Gyazo にアップロードして URL を得る (リポジトリに画像をコミットしないため)。Use when a screenshot needs to be attached to a GitHub issue or pull request."
 ---
 
 ## 手順
