@@ -1,5 +1,6 @@
 {
   "repo": {
+    "description": "個人用の Claude Code plugin marketplace — スキル・エージェント・運用標準を複数マシンで共有する",
     "allow_squash_merge": true,
     "allow_merge_commit": false,
     "allow_rebase_merge": false,
@@ -30,6 +31,12 @@
       },
       {
         "type": "non_fast_forward"
+      },
+      {
+        "type": "required_signatures"
+      },
+      {
+        "type": "required_linear_history"
       },
       {
         "type": "pull_request",
