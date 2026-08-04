@@ -30,3 +30,5 @@ argument-hint: "[path] [--kind <swift|web|python|generic>]"
 
 - チェックリストの正本と各項目の生成方針 (`fix`): `~/.claude/repo-standards.json` (実体は shinyaoguri/setup の claude/repo-standards.json)
 - CLAUDE.md に書くべき内容の判断基準: 正本の `claude-md-quality` 項目の prompt
+
+このスキル自体の不具合・使いにくさに気付いたら、report-issue スキルで shinyaoguri/claude-plugins へ気軽に起票する。
