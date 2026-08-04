@@ -1,2 +1,6 @@
 # Claude Code が管理するランタイムディレクトリ (リポの一部ではない)
 .claude/worktrees/
+
+# 秘密情報の置き場 (コード・fixtures・ログに入れない)
+.env
+.env.*
