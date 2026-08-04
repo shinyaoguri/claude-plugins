@@ -1,7 +1,7 @@
 {
   "name": "repo-standards",
   "description": "リポジトリの構成・GitHub 設定・Claude 設定を個人標準 (shinyaoguri/setup の repo-standards.json が正本) と突き合わせて監査・修正・雛形生成する",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "author": {
     "name": "Shinya Oguri"
   },
