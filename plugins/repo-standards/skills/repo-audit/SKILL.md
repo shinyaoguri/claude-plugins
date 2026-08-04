@@ -14,7 +14,7 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
    bash "${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-github.sh"    # GitHub 設定 (gh 不在時は全 skip)
    ```
 
-2. `status: "manual"` の項目は detail の判定観点に従い、対象ファイルを自分で読んで ok / warn を判定する
+2. `status: "manual"` の項目は detail の判定観点に従って ok / warn を判定する。項目が複数あるときは項目ごとに並列でサブエージェントへ委譲し (対象ファイルのパスと判定観点を渡し、判定と根拠だけ返させる)、メインコンテキストには結果のみ集約する。1〜2 件なら自分で読んで判定してよい
 3. レポートを提示する: `_meta` 行 (kind / repo / visibility) をヘッダに、層ごとの表 (項目 | 判定 | 詳細)。末尾に集計 (必須 NG / 推奨 WARN / skip)。`standards-manifest-missing` が出たら監査を打ち切り、fix の内容 (setup リポのセットアップ) を案内する
 4. 修正候補を 3 群に分けて番号付きで提示し、群ごとに適用可否の承認を取る。承認された項目だけ適用する:
    - **A 群 (GitHub 設定)**: `.github/repo-settings.json` があるリポでは**この群を作らず B 群に含める** — 設定は gh コマンドでなく定義ファイルの変更として PR に載せ、マージ後に `apply-repo-settings.sh --apply` で反映する (承認が PR に一元化され、変更の根拠が diff に残る)。定義ファイルが無いリポでのみ、各項目の `fix` の gh コマンドを全文提示し承認後に実行する

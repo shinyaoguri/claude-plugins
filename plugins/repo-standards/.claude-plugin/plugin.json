@@ -1,7 +1,7 @@
 {
   "name": "repo-standards",
   "description": "リポジトリの構成・GitHub 設定・Claude 設定を個人標準 (shinyaoguri/setup の repo-standards.json が正本) と突き合わせて監査・修正・雛形生成する。Issue・PR に貼るスクリーンショットの Gyazo ホスト手順 (gyazo-capture) も含む",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "author": {
     "name": "Shinya Oguri"
   },
