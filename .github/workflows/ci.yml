@@ -37,10 +37,6 @@ jobs:
           ./scripts/test-rs-audit-repo.sh
           ./scripts/test-rs-doctor-env.sh
           ./scripts/test-repo-settings.sh
-      - name: リポジトリ設定のドリフト検査
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: ./scripts/apply-repo-settings.sh
 
   pr-policy:
     if: github.event_name == 'pull_request'
