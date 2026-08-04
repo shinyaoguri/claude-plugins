@@ -51,7 +51,6 @@
     "claude/repo-standards.json",
     "claude/CLAUDE.md",
     "claude/settings.json",
-    "claude/skills/README.md",
     "tasks/claude.yml"
   ]
 }

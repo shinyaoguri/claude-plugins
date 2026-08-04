@@ -24,5 +24,5 @@ description: "マシン側の Claude グローバル環境を診断する (~/.cl
 ## 詳細の在処
 
 - symlink の正しい張り方・配布対象の正本: setup リポの tasks/claude.yml (`claude_config_files`)
-- スキル置き場のルール (汎用 / リポ固有 / 第三者配布の切り分け): setup リポの claude/skills/README.md
+- スキル置き場のルール (汎用 / リポ固有 / 第三者配布の切り分け): setup リポの claude/CLAUDE.md (グローバル CLAUDE.md) のスキル節
 - 検査項目の実装: `${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh` (すべてビルトイン。正本 JSON に依存しない)
