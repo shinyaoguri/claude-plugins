@@ -137,7 +137,37 @@ else
     "jq empty ~/.claude/settings.json でエラー箇所を特定して修正する"
 fi
 
-# ---- 6. チェックリスト正本の解決 ----
+# ---- 6. gh トークンが管理権限を持っていないか ----
+# Claude と同じトークンに管理権限があると、監査対象の GitHub 設定そのものを
+# 書き換えられてしまう (repo-standards は防御機構ではない。ADR 0007 / setup#42)。
+# 判定は gh auth status のスコープ表示から行う。$RS_GH_AUTH_STATUS はテスト用の注入口
+gh_status="${RS_GH_AUTH_STATUS-}"
+if [ -z "$gh_status" ] && command -v gh >/dev/null 2>&1; then
+  gh_status=$(gh auth status 2>&1) || gh_status=""
+fi
+if [ -z "$gh_status" ]; then
+  emit env-gh-token-admin env recommended skip "gh が無いか未認証のためトークン権限を判定できない"
+else
+  # 例: "  - Token scopes: 'gist', 'read:org', 'repo'"
+  scopes=$(printf '%s\n' "$gh_status" | sed -n "s/.*Token scopes: *//p")
+  admin=""
+  for s in repo admin:org delete_repo site_admin; do
+    case "$scopes" in *"'$s'"*) admin="$admin $s" ;; esac
+  done
+  if [ -n "$admin" ]; then
+    emit env-gh-token-admin env recommended warn \
+      "gh のトークンが管理権限スコープを持つ ($admin) — ブランチ保護など監査対象の設定を書き換えられる" \
+      "fine-grained PAT (Administration: No access) を GH_TOKEN で渡し、keyring 側は gh auth logout する (shinyaoguri/setup#42)"
+  elif [ -z "$scopes" ]; then
+    # fine-grained PAT はスコープを表示しない。個別権限は gh からは判定できない
+    emit env-gh-token-admin env recommended ok \
+      "スコープ表示なし (fine-grained PAT の可能性。個別権限は gh からは判定できないため要目視)"
+  else
+    emit env-gh-token-admin env recommended ok "管理権限スコープなし ($scopes)"
+  fi
+fi
+
+# ---- 7. チェックリスト正本の解決 ----
 if manifest=$(resolve_standards); then
   emit env-standards-manifest env recommended ok "正本: $manifest"
 else
