@@ -7,9 +7,9 @@
     "squash_merge_commit_title": "PR_TITLE",
     "squash_merge_commit_message": "PR_BODY",
     "allow_auto_merge": true,
-    "allow_update_branch": false,
+    "allow_update_branch": true,
     "has_issues": true,
-    "has_wiki": true
+    "has_wiki": false
   },
   "ruleset": {
     "name": "main-protection",
