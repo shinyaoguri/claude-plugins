@@ -6,7 +6,7 @@ set -uo pipefail
 . "$(dirname "$0")/rs-lib.sh"
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-  emit not-a-git-repo meta - error "git リポジトリではない (リポジトリ内で実行する)"
+  emit not-a-git-repo meta required ng "git リポジトリではない (リポジトリ内で実行する)"
   exit 0
 }
 cd "$root"
@@ -159,7 +159,7 @@ builtin_no_stale_branches() {
     [ "$ts" -lt "$cutoff" ] && stale="$stale ${b#origin/}"
   done < <(git branch -r 2>/dev/null | tr -d ' ' | grep -vE '^origin/(HEAD|main|master)' )
   [ -z "$stale" ] && { echo ok; return; }
-  echo "fail:30 日以上更新の無いリモートブランチ:$stale"
+  echo "fail:30 日以上更新の無いリモートブランチ:$stale (ローカルの追跡 ref 基準。fetch していなければ古い可能性)"
 }
 
 # 秘密ファイルが追跡対象に入っていないか。履歴の書き換えは不可逆なので検出のみ

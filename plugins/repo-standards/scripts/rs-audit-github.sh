@@ -8,9 +8,11 @@ set -uo pipefail
 
 manifest=$(resolve_standards) || { emit_manifest_missing; exit 0; }
 
-# 前提が満たせないとき: layer=github の全項目を同じ理由で skip して正常終了
+# 前提が満たせないとき: layer=github の全項目を同じ理由で skip して正常終了。
+# レポートのヘッダ材料になる _meta 行はこの経路でも欠かさない
 skip_all() {
   local reason=$1
+  jq -cn --arg reason "$reason" '{id:"_meta",layer:"github",skipped:true,reason:$reason}'
   while IFS=$'\t' read -r id level; do
     emit "$id" github "$level" skip "$reason"
   done < <(jq -r '.items[] | select(.layer == "github") | [.id, .level] | @tsv' "$manifest")
@@ -37,17 +39,24 @@ if [ "$(jq -r .archived <<<"$repo_json")" = "true" ]; then
 fi
 
 # ---- ruleset / classic protection の情報は複数の builtin で使うため一度だけ収集 ----
-# default branch を対象にした enforcement=active な ruleset の rules[].type を集める
-ruleset_rule_types=""
+# enforcement=active な ruleset の本体を 1 行 1 JSON で保持し、branch / tag 両方の判定で使い回す
+active_rulesets=""
 if rids=$(gh api "repos/$repo/rulesets" --jq '.[] | select(.enforcement == "active") | .id' 2>/dev/null); then
   for rid in $rids; do
     rs=$(gh api "repos/$repo/rulesets/$rid" 2>/dev/null) || continue
-    if jq -e --arg b "refs/heads/$default_branch" \
-      '.conditions.ref_name.include // [] | any(. == "~DEFAULT_BRANCH" or . == $b)' >/dev/null <<<"$rs"; then
-      ruleset_rule_types="$ruleset_rule_types $(jq -r '[.rules[].type] | join(" ")' <<<"$rs")"
-    fi
+    active_rulesets="$active_rulesets$(jq -c . <<<"$rs")"$'\n'
   done
 fi
+
+# default branch を対象にした ruleset の rules[].type を集める
+ruleset_rule_types=""
+while IFS= read -r rs; do
+  [ -n "$rs" ] || continue
+  if jq -e --arg b "refs/heads/$default_branch" \
+    '.conditions.ref_name.include // [] | any(. == "~DEFAULT_BRANCH" or . == $b)' >/dev/null <<<"$rs"; then
+    ruleset_rule_types="$ruleset_rule_types $(jq -r '[.rules[].type] | join(" ")' <<<"$rs")"
+  fi
+done <<<"$active_rulesets"
 classic_json=$(gh api "repos/$repo/branches/$default_branch/protection" 2>/dev/null) || classic_json=""
 
 has_rule() { case " $ruleset_rule_types " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
@@ -71,7 +80,9 @@ builtin_main_pr_required() {
 }
 
 builtin_required_checks_configured() {
-  compgen -G ".github/workflows/*.yml" >/dev/null || { echo "skip:CI workflow が無いため対象外"; return; }
+  # .yml / .yaml 両対応 (片方だけの glob では取りこぼす。rs-audit-repo.sh の workflow_files と同じ理由)
+  { compgen -G ".github/workflows/*.yml" || compgen -G ".github/workflows/*.yaml"; } >/dev/null \
+    || { echo "skip:CI workflow が無いため対象外"; return; }
   if has_rule required_status_checks; then echo ok; return; fi
   if [ -n "$classic_json" ] && jq -e '.required_status_checks' >/dev/null 2>&1 <<<"$classic_json"; then
     echo ok; return
@@ -107,20 +118,19 @@ builtin_main_linear_history() {
   has_rule required_linear_history && echo ok || echo fail
 }
 
-# タグを打つリポだけの関心事。リリース済みタグの改変・削除を止める
+# タグを打つリポだけの関心事。リリース済みタグの改変・削除を止める。
+# ruleset は冒頭で収集済みの active_rulesets を使い回す (再取得しない)
 builtin_tag_protection() {
-  gh api "repos/$repo/tags" --jq '.[0].name' >/dev/null 2>&1 || { echo "skip:取得できない"; return; }
-  [ -n "$(gh api "repos/$repo/tags" --jq '.[0].name' 2>/dev/null)" ] \
-    || { echo "skip:タグが無い (リリースしないリポは対象外)"; return; }
-  local rids rs rid
-  rids=$(gh api "repos/$repo/rulesets" --jq '.[] | select(.enforcement == "active") | .id' 2>/dev/null) || rids=""
-  for rid in $rids; do
-    rs=$(gh api "repos/$repo/rulesets/$rid" 2>/dev/null) || continue
+  local n rs
+  n=$(gh api "repos/$repo/tags" --jq 'length' 2>/dev/null) || { echo "skip:取得できない"; return; }
+  [ "$n" -gt 0 ] 2>/dev/null || { echo "skip:タグが無い (リリースしないリポは対象外)"; return; }
+  while IFS= read -r rs; do
+    [ -n "$rs" ] || continue
     [ "$(jq -r .target <<<"$rs")" = "tag" ] || continue
     if jq -e '[.rules[].type] | index("deletion") and index("non_fast_forward")' >/dev/null <<<"$rs"; then
       echo ok; return
     fi
-  done
+  done <<<"$active_rulesets"
   echo fail
 }
 

@@ -75,14 +75,16 @@ for name in $expected; do
 done
 
 # ---- 2. リンク先 checkout の未コミット差分 ----
+# 作業途中の正当な差分もあり得て人間の判断が要るため recommended/warn とする
+# (required にすると契約上 ng になり「違反確定」の扱いになってしまう)
 if [ -n "$link_root" ]; then
   dirty=$(git -C "$link_root" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
   if [ "$dirty" -gt 0 ]; then
-    emit env-linked-checkout-dirty env required warn \
+    emit env-linked-checkout-dirty env recommended warn \
       "symlink が指す checkout ($link_root) に未コミット差分が $dirty 件。実効設定と正本 (main) が食い違っている可能性" \
       "git -C $link_root diff で差分を確認し、コミット/PR するか破棄するかを判断する"
   else
-    emit env-linked-checkout-dirty env required ok "リンク先 checkout はクリーン"
+    emit env-linked-checkout-dirty env recommended ok "リンク先 checkout はクリーン"
   fi
 fi
 

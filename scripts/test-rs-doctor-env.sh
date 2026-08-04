@@ -51,6 +51,29 @@ assert ok "スコープ表示なし (fine-grained)" \
   - Active account: true"
 
 echo
+echo "env-linked-checkout-dirty (出力契約: warn を出すなら level は recommended):"
+
+# HOME を隔離し、dirty な checkout を指す symlink を組み立てて再現する
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/setuprepo/claude" "$tmp/home/.claude"
+git -C "$tmp/setuprepo" init -q -b main
+echo base > "$tmp/setuprepo/claude/CLAUDE.md"
+git -C "$tmp/setuprepo" add -A
+git -C "$tmp/setuprepo" -c user.email=t@example.com -c user.name=t commit -qm init
+echo dirty >> "$tmp/setuprepo/claude/CLAUDE.md"
+ln -s "$tmp/setuprepo/claude/CLAUDE.md" "$tmp/home/.claude/CLAUDE.md"
+
+line=$( HOME="$tmp/home" RS_GH_AUTH_STATUS="(認証情報なし)" bash "$target" \
+  | jq -c 'select(.id == "env-linked-checkout-dirty")' )
+if [ "$(jq -r .status <<<"$line")" = "warn" ] && [ "$(jq -r .level <<<"$line")" = "recommended" ]; then
+  echo "  [ok]   dirty な checkout → recommended/warn で報告"
+else
+  echo "  [FAIL] dirty な checkout → 期待 recommended/warn / 実際 $(jq -r '"\(.level)/\(.status)"' <<<"$line")"
+  failures=$((failures + 1))
+fi
+
+echo
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures 件"
   exit 1
