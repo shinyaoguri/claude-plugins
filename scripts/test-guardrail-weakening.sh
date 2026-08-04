@@ -24,6 +24,10 @@ case_run() {
     git init -q -b main
     git config user.email t@example.com
     git config user.name t
+    # 署名設定はグローバルから継承される。1Password の SSH agent がロック状態だと
+    # プロンプトで commit が落ちるので、テスト用リポでは明示的に切る
+    git config commit.gpgsign false
+    git config tag.gpgsign false
 
     # base: テスト・チェックスクリプト・CI が揃っている状態。
     # foo_test.py を 20 行にしてあるのは、行数減少のしきい値 (差し引き 10 行) の

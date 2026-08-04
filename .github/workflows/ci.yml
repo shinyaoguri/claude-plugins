@@ -33,7 +33,9 @@ jobs:
       - name: 上流参照のマニフェスト網羅 (upstream-refs.json)
         run: ./scripts/check-upstream-refs.sh --coverage
       - name: 同梱スクリプトの判定テスト
-        run: ./scripts/test-rs-audit-repo.sh
+        run: |
+          ./scripts/test-rs-audit-repo.sh
+          ./scripts/test-rs-doctor-env.sh
 
   pr-policy:
     if: github.event_name == 'pull_request'
