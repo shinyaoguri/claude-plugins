@@ -103,31 +103,34 @@ else
     "github.com/shinyaoguri/setup を ~/.setup へ clone してセットアップする"
 fi
 
-# ---- 4. ~/.claude/skills の実体コピー (スキル二重供給) ----
-# 規約: ~/.claude/skills 配下は setup が張る symlink のみ。第三者配布スキルの実体コピーは
-# marketplace 供給と二重になる (正本: setup リポ claude/skills/README.md)
+# ---- 4. ~/.claude/skills の残骸 (スキル二重供給・旧 symlink 供給の名残) ----
+# 規約: スキルは marketplace プラグインか各リポの .claude/skills で供給し、~/.claude/skills
+# には置かない (正本: setup リポ claude/CLAUDE.md のスキル節)。かつて setup が汎用スキルを
+# ここへ symlink していた (2026-08 に廃止) ため、その残骸 symlink も検出する
 plugin_skills=$(find "$claude_dir/plugins" -maxdepth 8 -type d -path '*/skills/*' 2>/dev/null \
   | awk -F/ '$(NF-1) == "skills" {print $NF}' | sort -u)
-found_real=0
+found_any=0
 if [ -d "$claude_dir/skills" ]; then
-  for d in "$claude_dir/skills"/*/; do
-    [ -d "$d" ] || continue
-    d=${d%/}
+  for d in "$claude_dir/skills"/*; do
+    { [ -e "$d" ] || [ -L "$d" ]; } || continue
     name=$(basename "$d")
-    [ -L "$d" ] && continue
-    found_real=1
-    if printf '%s\n' "$plugin_skills" | grep -qx "$name"; then
+    found_any=1
+    if [ -L "$d" ] && [[ "$(readlink "$d")" == "$HOME/.setup/claude/skills/"* ]]; then
+      emit "env-skill-legacy-$name" env required ng \
+        "~/.claude/skills/$name が setup の旧 skills symlink 供給の残骸" \
+        "rm ~/.claude/skills/$name (削除系: 実行はユーザー判断)。スキル本体は marketplace プラグインで供給される"
+    elif printf '%s\n' "$plugin_skills" | grep -qx "$name"; then
       emit "env-skill-duplicate-$name" env required ng \
         "~/.claude/skills/$name が実体コピーで、プラグイン供給と二重になっている" \
         "rm -rf ~/.claude/skills/$name (削除系: 実行はユーザー判断)"
     else
       emit "env-skill-untracked-$name" env recommended warn \
-        "~/.claude/skills/$name が setup 管理外の実体ディレクトリ" \
-        "汎用スキルなら setup リポ claude/skills/ へ、リポ固有なら該当リポの .claude/skills/ へ移す"
+        "~/.claude/skills/$name が管理外に置かれている" \
+        "汎用スキルなら claude-plugins の marketplace プラグインへ、リポ固有なら該当リポの .claude/skills/ へ移す"
     fi
   done
 fi
-[ "$found_real" -eq 0 ] && emit env-skills-clean env required ok "~/.claude/skills に実体コピーなし"
+[ "$found_any" -eq 0 ] && emit env-skills-clean env required ok "~/.claude/skills に残骸なし"
 
 # ---- 5. settings.json が壊れていないか ----
 if jq empty "$claude_dir/settings.json" 2>/dev/null; then
