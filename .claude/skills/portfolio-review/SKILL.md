@@ -11,6 +11,7 @@ description: "claude-plugins marketplace の月次俯瞰レビュー。Claude �
 
 - このリポジトリ (shinyaoguri/claude-plugins) の checkout で実行する
 - 提案の判断材料になるので、開始時に `gh issue list --state open` と `gh issue list --label freshness --state all --limit 10` で未対応の検知・提案を把握する
+- 手順 1〜4 の読み取り調査は互いに独立なので、それぞれ並列サブエージェントへ委譲し、メインコンテキストには所見と根拠のみ集約する (セッション履歴や上流 docs の現物をメインへ読み込まない)。起票の判断と統廃合の相談はメインで行う
 
 ## 手順
 
