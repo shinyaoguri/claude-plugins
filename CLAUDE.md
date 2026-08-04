@@ -15,7 +15,7 @@
 - SKILL.md の frontmatter description は必ずクォートする (裸の `: ` が混ざると YAML パースが落ち、メタデータ全体が無視される)
 - CI と同じチェックはローカルで `scripts/check-consistency.sh` / `scripts/check-deprecated-patterns.sh` / `scripts/check-version-bump.sh` / `scripts/check-upstream-refs.sh --coverage` として実行できる
 - GitHub のリポジトリ設定は [.github/repo-settings.json](.github/repo-settings.json) が正本。**設定は GitHub の画面や gh コマンドで直接変えず、この JSON を変える PR として出す** (ADR [0008](docs/decisions/0008-repo-settings-as-code.md))。適用は `scripts/apply-repo-settings.sh --apply`、差分検査は引数なし。**admin 権限のあるトークンで実行する** (CI の GITHUB_TOKEN では管理系フィールドが読めないため CI では回さない)
-- プラグイン同梱スクリプトの判定ロジックは `scripts/test-rs-audit-repo.sh` / `scripts/test-rs-doctor-env.sh` でテストする。一時 git リポと最小 manifest を組み立て、出力 (JSON Lines) の status を検証するエンドツーエンド方式 (正本との出力契約ごと守るため、関数を source しない)
+- プラグイン同梱スクリプトの判定ロジックは `scripts/test-rs-*.sh` (対象スクリプトごとに 1 本) でテストする。一時 git リポと最小 manifest を組み立て、出力 (JSON Lines) の status を検証するエンドツーエンド方式 (正本との出力契約ごと守るため、関数を source しない)
 - `scripts/check-guardrail-weakening.sh` (テスト: `scripts/test-guardrail-weakening.sh`) だけは**ゲートでなくレポート**で、検出しても exit 0 を保つ。守りを緩める変更は正当な場合があるので止めず、ラベルとコメントで可視化する (ADR [0007](docs/decisions/0007-guardrail-visibility.md))
 
 ## バージョン規約 (ADR [0003](docs/decisions/0003-version-policy.md))
