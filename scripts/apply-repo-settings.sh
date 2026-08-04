@@ -21,8 +21,11 @@ mode=check
 [ "${1:-}" = "--apply" ] && mode=apply
 
 command -v gh >/dev/null 2>&1 || { echo "NG: gh が無い" >&2; exit 1; }
-repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) \
-  || { echo "NG: GitHub 上のリポジトリを特定できない" >&2; exit 1; }
+repo=${REPO_SETTINGS_REPO:-}                          # テスト用の注入口
+if [ -z "$repo" ]; then
+  repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) \
+    || { echo "NG: GitHub 上のリポジトリを特定できない" >&2; exit 1; }
+fi
 
 drift=0
 note() { echo "DRIFT: $*"; drift=1; }

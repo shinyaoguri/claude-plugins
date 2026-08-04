@@ -21,7 +21,9 @@ rulesets_ok=$(jq -c '[.ruleset | {id: 1, name: .name}]' "$def")
 assert() {
   local want=$1 name=$2 cur=$3 list=$4 detail=$5
   local out got
-  out=$( cd "$repo_root" && REPO_SETTINGS_CURRENT_JSON="$cur" REPO_RULESETS_JSON="$list" \
+  # リポ名も注入する。gh repo view に落とすと CI (認証なし) で実 API を叩いて落ちる
+  out=$( cd "$repo_root" && REPO_SETTINGS_REPO="owner/repo" \
+    REPO_SETTINGS_CURRENT_JSON="$cur" REPO_RULESETS_JSON="$list" \
     REPO_RULESET_DETAIL_JSON="$detail" bash "$target" 2>&1 )
   got=$?
 
