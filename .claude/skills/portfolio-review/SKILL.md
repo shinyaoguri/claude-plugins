@@ -25,6 +25,7 @@ description: "claude-plugins marketplace の月次俯瞰レビュー。Claude �
 
 - 各プラグイン (marketplace.json の一覧) について、直近 1 ヶ月で実際に発火・参照された形跡があるかをセッション履歴から確認する
 - 使われていない・記述が実作業とずれている・2 つのスキルが常に同時に読まれている、などがあれば統合・廃止・降格の候補にする
+- **分割・統合の判断基準は ADR [0009](../../../docs/decisions/0009-plugin-granularity.md)** (粒度は enable/disable と version の単位で決める)。description の凝集度・検索性・スキル起動精度は分離の理由にならないので、それだけを根拠にした分割案は出さない
 
 ### 3. 意味的ドリフトの点検
 

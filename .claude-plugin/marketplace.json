@@ -33,7 +33,7 @@
     {
       "name": "repo-standards",
       "source": "./plugins/repo-standards",
-      "description": "リポジトリの構成・GitHub 設定・Claude 設定を個人標準 (shinyaoguri/setup の repo-standards.json が正本) と突き合わせて監査・修正・雛形生成する。Issue・PR に貼るスクリーンショットの Gyazo ホスト手順、プラグイン利用中に起きた問題の起票手順も含む。/repo-audit /env-doctor /repo-bootstrap /gyazo-capture /report-issue。",
+      "description": "個人の開発運用標準 — リポジトリ構成・GitHub 設定・マシンの Claude 環境を正本 (shinyaoguri/setup の repo-standards.json) と突き合わせて監査・修正・雛形生成し、作業の記録 (Issue・PR へのスクリーンショット添付、気付きの起票) を標準どおりの手順で行う。/repo-audit /env-doctor /repo-bootstrap /gyazo-capture /report-issue。",
       "keywords": [
         "repo-standards",
         "audit",
