@@ -27,3 +27,5 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
 - チェックリストの正本: `~/.claude/repo-standards.json` (実体は shinyaoguri/setup の claude/repo-standards.json。項目の追加・変更はプラグインでなく setup リポへの PR で行う)
 - 必須項目と根拠だけ見る: `jq -r '.items[] | select(.level=="required") | [.id, .why] | @tsv' ~/.claude/repo-standards.json`
 - 出力スキーマと status の意味: `${CLAUDE_PLUGIN_ROOT}/scripts/rs-lib.sh` 冒頭のコメント
+
+このスキル自体の不具合・使いにくさに気付いたら、report-issue スキルで shinyaoguri/claude-plugins へ気軽に起票する。
