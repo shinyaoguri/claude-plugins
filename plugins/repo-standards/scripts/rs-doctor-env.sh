@@ -157,7 +157,7 @@ else
   if [ -n "$admin" ]; then
     emit env-gh-token-admin env recommended warn \
       "gh のトークンが管理権限スコープを持つ ($admin) — ブランチ保護など監査対象の設定を書き換えられる" \
-      "fine-grained PAT (Administration: No access) を GH_TOKEN で渡し、keyring 側は gh auth logout する (shinyaoguri/setup#42)"
+      "権限の剥奪は採らない (実効性が崩れやすくコストが継続するため: shinyaoguri/setup#42)。bypass_actors を空にした ruleset を張り、設定変更を検知する仕組みで担保する"
   elif [ -z "$scopes" ]; then
     # fine-grained PAT はスコープを表示しない。個別権限は gh からは判定できない
     emit env-gh-token-admin env recommended ok \
