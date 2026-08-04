@@ -26,7 +26,9 @@
 
 ## 記録規約 (メモリリセット耐性)
 
-- 気付き・改善案・迷った判断は作業を止めずに Issue へ (テンプレートあり)。チャットや auto-memory にだけ残すのは禁止 (揮発する)
+- 気付き・改善案・迷った判断は作業を止めずに Issue へ。チャットや auto-memory にだけ残すのは禁止 (揮発する)
+- Issue は [.github/ISSUE_TEMPLATE/](.github/ISSUE_TEMPLATE/) の見出し構成に沿って書く (改善提案なら 背景・きっかけ / 提案内容 / 期待効果・放置した場合のリスク)。**`gh issue create` は web のテンプレートを通らないので `--label` を明示的に付ける** — improvement.yml → `improvement` / drift-report.yml → `freshness` / plugin-proposal.yml → `plugin-proposal`
+- **GUI を伴う作業はスクリーンショットを添える**。GitHub には Issue へ画像を添付する API が無いため、画像を `docs/images/` にコミットし **commit SHA を含む raw URL** で参照する (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/docs/images/<name>.png`。ブランチ名の URL はブランチ削除で切れる)。Issue を先に立てる場合は本文に観測内容をテキストで書き、画像は後続 PR でコミットしてからコメントで貼る
 - 確定した設計判断は docs/decisions/ に ADR として追記する
 
 ## 陳腐化防止の仕組み
