@@ -109,7 +109,7 @@ builtin_test_dir_exists() {
     [ -d "$p" ] && { echo ok; return; }
   done
   git ls-files 2>/dev/null \
-    | grep -qiE '(^|/)(test_[^/]+\.py|[^/]+_test\.(py|go|ts|js|rb)|[^/]+\.(test|spec)\.(ts|tsx|js|jsx|mjs)|[^/]*Tests?\.swift)$' \
+    | grep -qiE '(^|/)(test[-_][^/]+\.(py|sh|bash)|[^/]+_test\.(py|go|ts|js|rb|sh)|[^/]+\.(test|spec)\.(ts|tsx|js|jsx|mjs)|[^/]+\.bats|[^/]*Tests?\.swift)$' \
     && { echo ok; return; }
   echo fail
 }
@@ -122,7 +122,8 @@ builtin_tests_run_in_ci() {
   files=$(workflow_files)
   [ -n "$files" ] || { echo "skip:CI workflow が無いため対象外"; return; }
   # 代表的なテスト実行コマンド。言語が増えたらここも育てる
-  if grep -qhE '(swift test|npm (run )?test|pnpm (run )?test|yarn test|pytest|unittest|go test|cargo test|bun test|vitest|jest)' $files; then
+  # (bash はテストランナーでなくスクリプトの直接実行 ./scripts/test-*.sh が慣習)
+  if grep -qhE '(swift test|npm (run )?test|pnpm (run )?test|yarn test|pytest|unittest|go test|cargo test|bun test|vitest|jest|(^|[ /])(test[-_][^ ]*|[^ /]*_test)\.(sh|bash)|(^| )bats )' $files; then
     echo ok
   else
     echo fail

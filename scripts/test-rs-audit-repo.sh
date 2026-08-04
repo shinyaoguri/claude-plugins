@@ -13,7 +13,7 @@ trap 'rm -rf "$tmp"' EXIT
 
 failures=0
 
-# 1 項目だけの最小 manifest。level は recommended なので違反時の status は warn
+# 検証対象の builtin だけを持つ最小 manifest。level は recommended なので違反時の status は warn
 manifest="$tmp/standards.json"
 cat > "$manifest" <<'EOF'
 {
@@ -28,10 +28,31 @@ cat > "$manifest" <<'EOF'
       "check": { "type": "builtin", "name": "adr_exists" },
       "why": "テスト用",
       "fix": "テスト用"
+    },
+    {
+      "id": "test-dir-exists",
+      "layer": "repo",
+      "level": "recommended",
+      "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "test_dir_exists" },
+      "why": "テスト用",
+      "fix": "テスト用"
+    },
+    {
+      "id": "tests-run-in-ci",
+      "layer": "repo",
+      "level": "recommended",
+      "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "tests_run_in_ci" },
+      "why": "テスト用",
+      "fix": "テスト用"
     }
   ]
 }
 EOF
+
+# assert が検証する項目 id (セクションごとに切り替える)
+check_id=adr-exists
 
 # assert <期待 status> <ケース名> <セットアップコマンド...>
 assert() {
@@ -42,7 +63,7 @@ assert() {
 
   local got
   got=$( cd "$dir" && REPO_STANDARDS_JSON="$manifest" bash "$target" \
-    | jq -r 'select(.id == "adr-exists") | .status' )
+    | jq -r --arg id "$check_id" 'select(.id == $id) | .status' )
 
   if [ "$got" = "$want" ]; then
     echo "  [ok]   $name → $got"
@@ -76,6 +97,40 @@ assert warn "README.md しか無い" \
 # 境界値: サブディレクトリの .md は数えない (maxdepth 1)
 assert warn "サブディレクトリの .md のみ" \
   bash -c 'mkdir -p docs/decisions/drafts && echo "# 草案" > docs/decisions/drafts/0001-x.md'
+
+echo
+echo "builtin_test_dir_exists (bash テスト):"
+check_id=test-dir-exists
+
+# 正常系: scripts/test-*.sh 形式 (このリポ自身の形。#47 で塞いだ穴)
+assert ok "scripts/test-*.sh を認識する" \
+  bash -c 'mkdir -p scripts && touch scripts/test-foo.sh && git add -A'
+
+# 正常系: *_test.sh 形式
+assert ok "*_test.sh を認識する" \
+  bash -c 'mkdir -p scripts && touch scripts/foo_test.sh && git add -A'
+
+# 境界値: 名前に test を含むだけのスクリプトは誤検出しない
+assert warn "latest-build.sh は誤検出しない" \
+  bash -c 'mkdir -p scripts && touch scripts/latest-build.sh && git add -A'
+
+echo
+echo "builtin_tests_run_in_ci (bash テスト):"
+check_id=tests-run-in-ci
+
+# 正常系: workflow がテストスクリプトを直接実行している (このリポ自身の形)
+assert ok "CI で ./scripts/test-*.sh を実行している" \
+  bash -c 'mkdir -p scripts .github/workflows && touch scripts/test-foo.sh &&
+           printf "jobs:\n  t:\n    steps:\n      - run: ./scripts/test-foo.sh\n" > .github/workflows/ci.yml &&
+           git add -A'
+
+# 失敗系: テストはあるが CI が実行していない
+assert warn "テストはあるが CI で実行していない" \
+  bash -c 'mkdir -p scripts .github/workflows && touch scripts/test-foo.sh &&
+           printf "jobs:\n  t:\n    steps:\n      - run: echo build\n" > .github/workflows/ci.yml &&
+           git add -A'
+
+check_id=adr-exists
 
 echo
 echo "前提不足時の報告 (出力契約の範囲内で):"
