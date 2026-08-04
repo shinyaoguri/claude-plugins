@@ -38,6 +38,8 @@ jobs:
           ./scripts/test-rs-audit-github.sh
           ./scripts/test-rs-doctor-env.sh
           ./scripts/test-repo-settings.sh
+      - name: リポ側チェックスクリプトの判定テスト
+        run: ./scripts/test-upstream-refs.sh
 
   pr-policy:
     if: github.event_name == 'pull_request'

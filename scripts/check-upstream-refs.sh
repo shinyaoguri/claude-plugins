@@ -15,16 +15,21 @@ manifest=upstream-refs.json
 mode="${1:---coverage}"
 fail=0
 
-# 上流ドキュメント・実装ファイルを指す典型トークン。プラグインの語彙が増えたらここも育てる
-token_re='(CONTRACT\.md|AGENTS\.md|DEVELOPMENT\.md|CLAUDE\.md|llms[a-z-]*\.txt|examples-index\.(md|json)|docs/ai/[A-Za-z0-9._/-]+|docs/[a-z-]+\.md|scripts/[A-Za-z0-9_-]+\.sh|check-contract[a-z-]*\.sh|[A-Za-z][A-Za-z0-9]*\.swift|[a-z.-]+\.schema\.json|templates\.json|syphon-bump\.yml|ShaderSources|Shaders/Metal)'
+# 上流ドキュメント・実装ファイルを指す典型トークン。プラグインの語彙が増えたらここも育てる。
+# .ya?ml は個別列挙せず総称で拾う (ansible の playbook・Issue テンプレート・ワークフローと
+# 種類が増え続けるため。誤爆したら ignore_re 側で落とす)
+token_re='(CONTRACT\.md|AGENTS\.md|DEVELOPMENT\.md|CLAUDE\.md|llms[a-z-]*\.txt|examples-index\.(md|json)|docs/ai/[A-Za-z0-9._/-]+|docs/[a-z-]+\.md|scripts/[A-Za-z0-9_-]+\.sh|check-contract[a-z-]*\.sh|[A-Za-z][A-Za-z0-9]*\.swift|[a-z.-]+\.schema\.json|templates\.json|[A-Za-z0-9_.-]+\.ya?ml|ShaderSources|Shaders/Metal)'
 # metaphor new が各プロジェクトに生成するファイル等、上流リポの実体ではないトークンと、
 # プラグイン同梱スクリプト (rs- プレフィックス。repo-standards の ${CLAUDE_PLUGIN_ROOT}/scripts/)
 ignore_re='^(PROJECT_BRIEF\.md|App\.swift|scripts/rs-[a-z-]+\.sh)$'
 
 coverage() {
-  local entries tokens t hit e
+  local entries tokens t hit e count=0
   entries=$(jq -r '.[] | .[]' "$manifest")
-  tokens=$(grep -rhoE "$token_re" plugins --include='*.md' | sort -u)
+  # トークンが 1 件も無いとき grep は exit 1 を返す。検出 0 件は異常ではないので握って続行する
+  # (握らないと「NG も OK も出さずに exit 1」という判別不能な落ち方になる)
+  tokens=$(grep -rhoE "$token_re" plugins --include='*.md' | sort -u) || tokens=''
+  [ -n "$tokens" ] && count=$(wc -l <<<"$tokens" | tr -d ' ')
   while IFS= read -r t; do
     [ -n "$t" ] || continue
     [[ "$t" =~ $ignore_re ]] && continue
@@ -37,7 +42,7 @@ coverage() {
       fail=1
     fi
   done <<<"$tokens"
-  [ "$fail" -eq 0 ] && echo "OK: coverage ($(wc -l <<<"$tokens" | tr -d ' ') トークン検査)"
+  [ "$fail" -eq 0 ] && echo "OK: coverage (${count} トークン検査)"
 }
 
 # $1=エントリ $2=ツリー内パス

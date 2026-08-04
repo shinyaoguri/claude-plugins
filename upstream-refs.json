@@ -51,7 +51,8 @@
     "claude/repo-standards.json",
     "claude/CLAUDE.md",
     "claude/settings.json",
-    "tasks/claude.yml"
+    "tasks/claude.yml",
+    "playbook_sillicon_mac.yml"
   ],
   "shinyaoguri/claude-plugins": [
     ".github/ISSUE_TEMPLATE/improvement.yml",
