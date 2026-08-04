@@ -124,21 +124,6 @@ builtin_tag_protection() {
   echo fail
 }
 
-# ブランチ命名規約 (<type>/<説明>) の GitHub 側での強制。
-# 注意: bot と Claude Code のブランチを許可しないと PR が作れなくなる
-# (dependabot/... と claude/... は実在する。fix の正規表現に含める)
-builtin_branch_name_pattern() {
-  local rids rs rid
-  rids=$(gh api "repos/$repo/rulesets" --jq '.[] | select(.enforcement == "active") | .id' 2>/dev/null) || rids=""
-  for rid in $rids; do
-    rs=$(gh api "repos/$repo/rulesets/$rid" 2>/dev/null) || continue
-    if jq -e '[.rules[].type] | index("branch_name_pattern")' >/dev/null <<<"$rs"; then
-      echo ok; return
-    fi
-  done
-  echo fail
-}
-
 # ---- 項目ループ ----
 
 while IFS= read -r item; do
