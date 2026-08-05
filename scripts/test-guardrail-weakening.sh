@@ -17,7 +17,7 @@ failures=0
 case_run() {
   local name=$1 want=$2; shift 2
   local dir="$tmp/case-$RANDOM"
-  mkdir -p "$dir/scripts" "$dir/.github/workflows"
+  mkdir -p "$dir/scripts" "$dir/.github/workflows" "$dir/plugins/demo/scripts" "$dir/plugins/demo/skills"
 
   (
     cd "$dir" || exit 1
@@ -36,6 +36,9 @@ case_run() {
     printf '#!/bin/sh\nexit 0\n' > scripts/check-foo.sh
     printf 'jobs:\n  a:\n    steps:\n      - name: test\n        run: ./scripts/check-foo.sh\n' \
       > .github/workflows/ci.yml
+    # プラグイン同梱の監査スクリプトと、守りではない同梱ドキュメント
+    seq 1 20 | sed 's/^/builtin_/' > plugins/demo/scripts/rs-audit-demo.sh
+    printf '# demo\n' > plugins/demo/skills/SKILL.md
     git add -A && git commit -qm base
     git branch base-ref
   ) || { echo "  [ERROR] $name: base 作成失敗"; failures=$((failures + 1)); return; }
@@ -72,6 +75,12 @@ case_run "pytest の skip 追加" detect \
 case_run "CI ステップの削除" detect \
   bash -c 'printf "jobs:\n  a:\n    steps: []\n" > .github/workflows/ci.yml'
 
+# 監査ロジックそのものも守り (builtin を削って基準を緩める変更を可視化する)
+case_run "プラグイン同梱の監査スクリプトの削除" detect \
+  rm plugins/demo/scripts/rs-audit-demo.sh
+case_run "監査スクリプトから判定が大きく減る" detect \
+  bash -c 'seq 1 5 | sed "s/^/builtin_/" > plugins/demo/scripts/rs-audit-demo.sh'
+
 # --- 検出されるべきでない変更 (誤検知の確認) ---
 case_run "テストを増やす" clean \
   bash -c 'seq 1 21 | sed "s/^/assert /" > scripts/foo_test.py'
@@ -79,6 +88,8 @@ case_run "守りと無関係なファイルの追加" clean \
   bash -c 'printf "# doc\n" > README.md'
 case_run "テストの小さな書き換え" clean \
   bash -c 'seq 1 20 | sed "s/^/assert /" | sed "s/^assert 9$/assert 99/" > scripts/foo_test.py'
+case_run "プラグイン同梱でも守りでないファイルの削除" clean \
+  rm plugins/demo/skills/SKILL.md
 
 echo
 if [ "$failures" -gt 0 ]; then
