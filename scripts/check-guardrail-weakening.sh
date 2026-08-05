@@ -26,11 +26,14 @@ base="${BASE_REF:-origin/main}"
 git rev-parse --verify -q "$base^{commit}" >/dev/null \
   || { echo "NG: 比較先 $base が解決できない (fetch 済みか確認)" >&2; exit 1; }
 
-# 守りに当たるファイルか。テスト本体・チェックスクリプト・CI・hook
+# 守りに当たるファイルか。テスト本体・チェックスクリプト・CI・hook・監査スクリプト
 is_guard() {
   case "$1" in
     *test*|*Test*|*spec*|*_test.py|*.test.ts|*.test.js|*.spec.ts) return 0 ;;
     scripts/check-*.sh|.github/workflows/*) return 0 ;;
+    # プラグイン同梱スクリプト。監査ロジック (rs-audit-*.sh の builtin など) を
+    # 削る変更も「守りを弱める」に当たる
+    plugins/*/scripts/*.sh) return 0 ;;
     *hooks/*) return 0 ;;
     *) return 1 ;;
   esac
