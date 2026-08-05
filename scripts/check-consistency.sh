@@ -26,6 +26,13 @@ while IFS=$'\t' read -r name source; do
   pj_name=$(jq -r .name "$pj")
   [ "$pj_name" = "$name" ] || err "$name: plugin.json の name ($pj_name) が marketplace.json と不一致"
   grep -q "plugins/$name" README.md || err "$name: README.md のプラグイン表に載っていない"
+
+  # keywords は両方に書ける (version と違い優先順位が公式に定義されていない)。
+  # どちらが読まれても同じになるよう一致を強制し、二重管理のずれをここで止める
+  mp_kw=$(jq -cS --arg n "$name" '.plugins[] | select(.name == $n) | .keywords // []' "$mp")
+  pj_kw=$(jq -cS '.keywords // []' "$pj")
+  [ "$mp_kw" = "$pj_kw" ] \
+    || err "$name: keywords が marketplace.json ($mp_kw) と plugin.json ($pj_kw) で不一致"
 done < <(jq -r '.plugins[] | [.name, .source] | @tsv' "$mp")
 
 # テストスクリプト → CI への登録漏れ。書いても呼ばれなければ無いのと同じで、
