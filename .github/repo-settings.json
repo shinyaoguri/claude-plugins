@@ -10,7 +10,15 @@
     "allow_auto_merge": true,
     "allow_update_branch": true,
     "has_issues": true,
-    "has_wiki": false
+    "has_wiki": false,
+    "security_and_analysis": {
+      "secret_scanning": {
+        "status": "enabled"
+      },
+      "secret_scanning_push_protection": {
+        "status": "enabled"
+      }
+    }
   },
   "ruleset": {
     "name": "main-protection",
