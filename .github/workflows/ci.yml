@@ -36,6 +36,7 @@ jobs:
         run: |
           ./scripts/test-rs-audit-repo.sh
           ./scripts/test-rs-audit-github.sh
+          ./scripts/test-rs-findings.sh
           ./scripts/test-rs-doctor-env.sh
           ./scripts/test-repo-settings.sh
       - name: リポ側チェックスクリプトの判定テスト
