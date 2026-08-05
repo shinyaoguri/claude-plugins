@@ -1,9 +1,17 @@
 {
   "name": "metaphor-contrib",
   "description": "shinyaoguri/metaphor と metaphor-cli にコントリビュートする人向け。クロスリポ契約ガード、生成物の鮮度、リリース規約、CLI 拡張手順への薄いルーター。",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "author": {
     "name": "Shinya Oguri"
   },
-  "homepage": "https://github.com/shinyaoguri/metaphor-cli"
+  "homepage": "https://github.com/shinyaoguri/metaphor-cli",
+  "repository": "https://github.com/shinyaoguri/claude-plugins",
+  "license": "MIT",
+  "keywords": [
+    "metaphor",
+    "contract",
+    "release",
+    "maintainer"
+  ]
 }
