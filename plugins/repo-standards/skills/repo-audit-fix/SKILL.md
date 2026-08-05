@@ -24,7 +24,7 @@ bash "$P/rs-findings.sh" summary
 
    | 群 | 対象 | 進め方 |
    |---|---|---|
-   | 1. 決定論的 | 内容が一意に決まるもの (設定ファイル・ワークフロー・テンプレートの配置) | まとめて 1 回承認し、1 コミット |
+   | 1. 決定論的 | 内容が一意に決まるもの (設定ファイル・ワークフロー・テンプレートの配置) | まとめて 1 回承認し、コミットは type ごとに分ける |
    | 2. 生成的 | リポ固有の中身を書き起こすもの (README・CLAUDE.md・ADR・CONTRIBUTING) | 1 件ずつ内容を提示して承認し、1 件 1 コミット |
    | 3. 破壊的 | 削除・履歴の書き換え・ブランチ整理・追跡済み秘密ファイルの除去 | コマンドを提示するだけ。実行はユーザーに委ねる |
 
@@ -41,11 +41,26 @@ bash "$P/rs-findings.sh" summary
    bash "$P/rs-findings.sh" set --decision deferred --note "<理由>" <id>...   # 今回は見送り
    ```
 
-4. 承認された項目を適用する。群 1・2 は `chore/repo-standards` ブランチを切って 1 PR にまとめる (標準適合が 1 関心事)。生成的 fix が多く 1 PR の粒度を超えるときは、関心ごとに PR を分けて残りを `deferred` にする。適用したら記録する:
+4. 承認された項目を適用する。`chore/repo-standards` ブランチを切り、群 1・2 をまとめて **1 PR** にする (標準適合が 1 関心事なので、項目ごとに PR は作らない)。
+
+   コミットは Conventional Commits で、**type が変わるものは分ける** (構成ファイルの追加は chore、CI の追加は ci、ドキュメントの生成は docs)。決定論的 fix をすべて 1 コミットに押し込むと、何をなぜ変えたのかが追えず revert もできなくなる。本文には適用した項目 id と、その項目がある理由 (`why`) を列挙して監査由来の変更だと分かるようにする:
+
+   ```
+   chore(repo-standards): 標準の構成ファイルを追加する
+
+   - gitignore-exists: リポ種別の生成物に合わせた .gitignore を追加
+     (全リポジトリで唯一共通の必須ファイル)
+   - pr-template-exists: .github/pull_request_template.md を追加
+     (目的・変更点・確認方法の記入漏れを防ぐ)
+   ```
+
+   適用したら記録する:
 
    ```bash
    bash "$P/rs-findings.sh" set --decision applied <id>...
    ```
+
+   生成的 fix が多く 1 PR の粒度を超えるときは、関心ごとに PR を分けて残りを `deferred` にする
 
 5. 再監査して before / after を表で提示する:
 
@@ -56,6 +71,13 @@ bash "$P/rs-findings.sh" summary
    直った項目は status が変わり decision が自動で消える。`applied_unresolved` が残っていたら適用が効いていないので、その項目の fix を見直す。GitHub 設定を定義ファイル経由で直した項目は PR マージ + 適用の後でないと解消しないので、その旨を添えて残す
 
 6. `deferred` が残っていれば、対象リポの Issue 1 件にまとめるかユーザーに確認する。findings はマシンローカル (`.git` 配下) で他マシンへ伝搬せず、リポを clone し直せば消えるため、持ち越しは GitHub 側へ移す
+
+7. PR を作る。**findings は揮発するので、この PR 本文が適用の記録の正本**になる。次を載せる:
+
+   - 適用した項目の表 (id | level | 何をしたか | why)
+   - 見送った項目 (`deferred` / `rejected`) と理由。`deferred` は手順 6 の Issue へリンクする
+   - 再監査の before / after (`summary` の `_next` 行の集計)
+   - GitHub 設定を定義ファイル経由で直した項目があれば、マージ後に適用操作が要る旨
 
 ## 詳細の在処
 
