@@ -10,11 +10,12 @@
 # (ADR 0008)。
 #
 # 定義に書いたキーだけを見る。書いていない設定には触れないので、段階的に
-# 管理範囲を広げられる。
+# 管理範囲を広げられる。ネストしたオブジェクト (security_and_analysis など) も
+# 定義に書いた深さだけを見る (兄弟キーは API が足して返すため無視する)。
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-def=.github/repo-settings.json
+def=${REPO_SETTINGS_DEF:-.github/repo-settings.json}   # テスト用の注入口
 [ -r "$def" ] || { echo "NG: $def が無い" >&2; exit 1; }
 
 mode=check
@@ -38,11 +39,25 @@ if [ -z "$current_repo" ]; then
     || { echo "NG: repos/$repo を取得できない (トークン権限を確認)" >&2; exit 1; }
 fi
 
+# want に書いたキーだけを have から再帰的に射影する。GitHub API のレスポンスは
+# 定義に書かない兄弟キーを含む (security_and_analysis なら dependabot_security_updates
+# など) ため、キー単位の完全一致ではネストしたオブジェクトを管理範囲に置けない。
+# want にあって have に無いキーは射影結果から落ちるので、欠損は差分として現れる
+project='
+def project($have; $want):
+  if ($want | type) == "object" and ($have | type) == "object"
+  then reduce ($want | keys_unsorted[]) as $k
+         ({}; if ($have | has($k)) then . + {($k): project($have[$k]; $want[$k])} else . end)
+  else $have end;
+'
+
 while IFS= read -r k; do
-  want=$(jq -c --arg k "$k" '.[$k]' <<<"$want_repo")
+  # -S でキー順を揃える (文字列比較なので、順序違いを差分にしない)
+  want=$(jq -cS --arg k "$k" '.[$k]' <<<"$want_repo")
   # `.[$k] // null` は使えない。jq の // は false も代替してしまい、false を
   # 設定した項目が常に差分に見える
-  have=$(jq -c --arg k "$k" 'if has($k) then .[$k] else null end' <<<"$current_repo")
+  have=$(jq -cS --argjson want "$want" --arg k "$k" \
+    "$project"'if has($k) then project(.[$k]; $want) else null end' <<<"$current_repo")
   [ "$want" = "$have" ] || note "repo.$k: $have → $want"
 done < <(jq -r '.repo | keys[]' "$def")
 

@@ -17,12 +17,16 @@ current_ok=$(jq -c '.repo' "$def")
 ruleset_ok=$(jq -c '.ruleset' "$def")
 rulesets_ok=$(jq -c '[.ruleset | {id: 1, name: .name}]' "$def")
 
+# 定義ファイルを差し替えたいケース (ネスト部分比較) で使う。空なら実定義
+def_override=""
+
 # assert <期待 exit> <ケース名> <repo の現状> <rulesets 一覧> <ruleset 詳細>
 assert() {
   local want=$1 name=$2 cur=$3 list=$4 detail=$5
   local out got
   # リポ名も注入する。gh repo view に落とすと CI (認証なし) で実 API を叩いて落ちる
   out=$( cd "$repo_root" && REPO_SETTINGS_REPO="owner/repo" \
+    REPO_SETTINGS_DEF="${def_override:-$def}" \
     REPO_SETTINGS_CURRENT_JSON="$cur" REPO_RULESETS_JSON="$list" \
     REPO_RULESET_DETAIL_JSON="$detail" bash "$target" 2>&1 )
   got=$?
@@ -75,6 +79,46 @@ assert 0 "rules の順序が違うだけ" "$current_ok" "$rulesets_ok" \
 
 # ruleset が読めない環境ではゲートにしない (トークン権限は環境で違う)
 assert 0 "ruleset を読めない" "$current_ok" "" "$ruleset_ok"
+
+echo
+echo "ネストしたオブジェクトの部分比較:"
+
+# security_and_analysis のようなネスト定義は実定義にまだ無いので、テスト用の定義を組む
+# (仕組みの変更と設定内容の変更は別 PR: ADR 0008)
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+nested_def="$tmp/repo-settings.json"
+jq '.repo.security_and_analysis = {
+      "secret_scanning": { "status": "enabled" },
+      "secret_scanning_push_protection": { "status": "enabled" }
+    }' "$def" > "$nested_def"
+
+nested_want=$(jq -c '.repo' "$nested_def")
+# API は定義に書かない兄弟キーを足して返す。これを差分にしないのが本ケースの主題
+nested_have=$(jq -c '.security_and_analysis += {
+    "dependabot_security_updates": { "status": "enabled" },
+    "secret_scanning_non_provider_patterns": { "status": "disabled" }
+  }' <<<"$nested_want")
+
+def_override="$nested_def"
+
+assert 0 "定義に無い兄弟キーがあっても一致扱い" "$nested_have" "$rulesets_ok" "$ruleset_ok"
+
+# ネストの奥の値が定義と違えば差分
+assert 1 "ネストした値が違う" \
+  "$(jq -c '.security_and_analysis.secret_scanning.status = "disabled"' <<<"$nested_have")" \
+  "$rulesets_ok" "$ruleset_ok"
+
+# 定義したネストのキーが現状に無い (機能ごと無効で API が返さない)
+assert 1 "ネストしたキーが欠けている" \
+  "$(jq -c 'del(.security_and_analysis.secret_scanning_push_protection)' <<<"$nested_have")" \
+  "$rulesets_ok" "$ruleset_ok"
+
+# ネストしたオブジェクトごと無い
+assert 1 "ネストしたオブジェクトごと欠けている" \
+  "$(jq -c 'del(.security_and_analysis)' <<<"$nested_have")" "$rulesets_ok" "$ruleset_ok"
+
+def_override=""
 
 echo
 if [ "$failures" -gt 0 ]; then
