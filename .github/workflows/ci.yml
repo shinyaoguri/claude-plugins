@@ -40,7 +40,9 @@ jobs:
           ./scripts/test-rs-doctor-env.sh
           ./scripts/test-repo-settings.sh
       - name: リポ側チェックスクリプトの判定テスト
-        run: ./scripts/test-upstream-refs.sh
+        run: |
+          ./scripts/test-upstream-refs.sh
+          ./scripts/test-guardrail-weakening.sh
 
   pr-policy:
     if: github.event_name == 'pull_request'

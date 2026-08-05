@@ -28,6 +28,12 @@ while IFS=$'\t' read -r name source; do
   grep -q "plugins/$name" README.md || err "$name: README.md のプラグイン表に載っていない"
 done < <(jq -r '.plugins[] | [.name, .source] | @tsv' "$mp")
 
+# テストスクリプト → CI への登録漏れ。書いても呼ばれなければ無いのと同じで、
+# 退行は誰かが手で回すまで分からない (実際 test-guardrail-weakening.sh が漏れていた)
+for t in scripts/test-*.sh; do
+  grep -qrF -- "$t" .github/workflows/ || err "$t が .github/workflows/ のどこからも実行されていない"
+done
+
 # plugins/ 直下のディレクトリ → marketplace への登録漏れ
 for d in plugins/*/; do
   name=$(basename "$d")
