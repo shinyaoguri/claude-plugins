@@ -11,6 +11,11 @@ target="$repo_root/plugins/repo-standards/scripts/rs-audit-repo.sh"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+# コミットを作るケースがあるので ident を注入する。CI ランナーには user.name /
+# user.email が無く、開発機の設定にも依存させない (どこで回しても同じ結果にする)
+export GIT_AUTHOR_NAME=rs-test GIT_AUTHOR_EMAIL=rs-test@example.invalid
+export GIT_COMMITTER_NAME=rs-test GIT_COMMITTER_EMAIL=rs-test@example.invalid
+
 failures=0
 
 # 検証対象の builtin だけを持つ最小 manifest。level は recommended なので違反時の status は warn
