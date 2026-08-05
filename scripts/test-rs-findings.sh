@@ -9,6 +9,12 @@ set -uo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 target="$repo_root/plugins/repo-standards/scripts/rs-findings.sh"
+
+# 一時リポでコミットするため author/committer を明示する。CI の runner には git の
+# user 設定が無く auto-detect に失敗してコミットが落ちる (macOS は hostname から
+# 補完するのでローカルでは再現しない)。HEAD が進まないと verdict の陳腐化を検証できない
+export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com
+export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
