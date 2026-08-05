@@ -184,6 +184,56 @@ assert_eq warn "$(jq -r 'select(.id == "gh-linear-history") | .status' <<<"$out"
   "保護なしなら直線履歴は warn"
 
 echo
+echo "ruleset のマッチング (has_rule が拾う条件):"
+
+# mk_ruleset_dir <ディレクトリ名> <enforcement> <conditions.ref_name.include の JSON 配列>
+# → 守りのルールを一式持つ ruleset だけがある fake 応答ディレクトリを作り、パスを返す
+mk_ruleset_dir() {
+  local d="$tmp/gh-$1"
+  mkdir -p "$d"
+  cp "$gh_dir/repos_tester_dummy.json" "$d/"
+  jq -cn --arg e "$2" '[{ id: 1, name: "main-protection", enforcement: $e }]' \
+    > "$d/repos_tester_dummy_rulesets.json"
+  jq -n --arg e "$2" --argjson inc "$3" '{
+    id: 1, name: "main-protection", target: "branch", enforcement: $e,
+    conditions: { ref_name: { include: $inc, exclude: [] } },
+    rules: [
+      { type: "deletion" }, { type: "non_fast_forward" }, { type: "required_status_checks" },
+      { type: "required_signatures" }, { type: "required_linear_history" }
+    ]
+  }' > "$d/repos_tester_dummy_rulesets_1.json"
+  printf '%s' "$d"
+}
+
+# assert_ruleset <期待 required-checks> <期待 signatures/linear> <ケース名> <fake dir>
+assert_ruleset() {
+  local want_checks=$1 want_rec=$2 name=$3 d=$4 out
+  out=$(run "$dir" env FAKE_GH_DIR="$d")
+  assert_eq "$want_checks" "$(jq -r 'select(.id == "gh-required-checks") | .status' <<<"$out")" \
+    "$name (必須チェック)"
+  assert_eq "$want_rec" "$(jq -r 'select(.id == "gh-signatures-required") | .status' <<<"$out")" \
+    "$name (署名必須)"
+  assert_eq "$want_rec" "$(jq -r 'select(.id == "gh-linear-history") | .status' <<<"$out")" \
+    "$name (直線履歴)"
+}
+
+# $dir は case-classic (workflow あり) を使い回す
+assert_ruleset ok ok "~DEFAULT_BRANCH 指定の active ruleset" \
+  "$(mk_ruleset_dir default active '["~DEFAULT_BRANCH"]')"
+
+# default branch を ref 名で明示した書き方も拾う
+assert_ruleset ok ok "refs/heads/main 明示の active ruleset" \
+  "$(mk_ruleset_dir explicit active '["refs/heads/main"]')"
+
+# enforcement が active でなければ守りとして機能していない (evaluate は「試験運用」)
+assert_ruleset ng warn "enforcement が evaluate の ruleset は数えない" \
+  "$(mk_ruleset_dir inactive evaluate '["~DEFAULT_BRANCH"]')"
+
+# default branch を対象にしていない ruleset を根拠にしない
+assert_ruleset ng warn "別ブランチ対象の ruleset は数えない" \
+  "$(mk_ruleset_dir other active '["refs/heads/release/*"]')"
+
+echo
 echo "前提不足時の skip_all:"
 
 # gh 未認証: 全項目 skip でも _meta 行を出す (レポートのヘッダ材料)
