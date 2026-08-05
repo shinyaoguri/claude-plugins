@@ -46,6 +46,33 @@ cat > "$manifest" <<'EOF'
       "check": { "type": "builtin", "name": "tests_run_in_ci" },
       "why": "テスト用",
       "fix": "テスト用"
+    },
+    {
+      "id": "no-committed-secrets",
+      "layer": "repo",
+      "level": "recommended",
+      "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "no_committed_secrets" },
+      "why": "テスト用",
+      "fix": "テスト用"
+    },
+    {
+      "id": "no-stale-branches",
+      "layer": "repo",
+      "level": "recommended",
+      "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "no_stale_branches" },
+      "why": "テスト用",
+      "fix": "テスト用"
+    },
+    {
+      "id": "worktrees-clean",
+      "layer": "repo",
+      "level": "recommended",
+      "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "worktrees_clean" },
+      "why": "テスト用",
+      "fix": "テスト用"
     }
   ]
 }
@@ -129,6 +156,87 @@ assert warn "テストはあるが CI で実行していない" \
   bash -c 'mkdir -p scripts .github/workflows && touch scripts/test-foo.sh &&
            printf "jobs:\n  t:\n    steps:\n      - run: echo build\n" > .github/workflows/ci.yml &&
            git add -A'
+
+echo
+echo "builtin_no_committed_secrets (除外パターンの境界):"
+check_id=no-committed-secrets
+
+# 正常系: 秘密ファイル候補が追跡されていない
+assert ok "普通のファイルだけ" \
+  bash -c 'echo hi > README.md && git add -A'
+
+# 失敗系: .env そのもの / 拡張子つき / 深い階層の秘密ファイル
+assert warn ".env を追跡している" \
+  bash -c 'echo "K=v" > .env && git add -f .env'
+
+assert warn ".env.production を追跡している" \
+  bash -c 'echo "K=v" > .env.production && git add -f .env.production'
+
+assert warn "サブディレクトリの秘密鍵 (*.pem)" \
+  bash -c 'mkdir -p certs && echo x > certs/server.pem && git add -A'
+
+assert warn "credentials.json を追跡している" \
+  bash -c 'mkdir -p config && echo "{}" > config/gcp-credentials.json && git add -A'
+
+# 境界値: 雛形は秘密でないので除外する (3 つの綴りすべて)
+assert ok ".env.example / .sample / .template は除外" \
+  bash -c 'for s in example sample template; do echo "K=" > ".env.$s"; done && git add -A'
+
+# 境界値: 公開鍵は秘密ではない (id_rsa の前方一致で拾わない)
+assert ok "id_rsa.pub は拾わない" \
+  bash -c 'mkdir -p keys && echo x > keys/id_rsa.pub && git add -A'
+
+# 境界値: 追跡されていなければ検出しない (ローカルに置くのは正しい運用)
+assert ok "追跡していない .env は対象外" \
+  bash -c 'echo "K=v" > .env'
+
+echo
+echo "builtin_no_stale_branches (30 日境界):"
+check_id=no-stale-branches
+
+# リモート追跡 ref を任意の日付で作る。@<epoch> 形式は macOS / GNU 双方で通る
+mk_remote_branch() { # <name> <何日前>
+  local ts; ts=$(( $(date +%s) - $2 * 86400 ))
+  GIT_COMMITTER_DATE="@$ts +0000" GIT_AUTHOR_DATE="@$ts +0000" \
+    git commit -q --allow-empty -m "$1" &&
+    git update-ref "refs/remotes/origin/$1" HEAD
+}
+export -f mk_remote_branch
+
+# 正常系: リモートブランチが無い
+assert ok "リモートブランチが無い" \
+  bash -c 'git commit -q --allow-empty -m init'
+
+# 境界値: 29 日前は「作業中」の範囲
+assert ok "29 日前のブランチは残骸としない" \
+  bash -c 'mk_remote_branch feature-recent 29'
+
+# 失敗系: 31 日前は残骸
+assert warn "31 日前のブランチは残骸" \
+  bash -c 'mk_remote_branch feature-old 31'
+
+# 境界値: main / master / HEAD は長命ブランチなので古くても対象外
+assert ok "origin/main は古くても対象外" \
+  bash -c 'mk_remote_branch main 400'
+
+assert ok "origin/master は古くても対象外" \
+  bash -c 'mk_remote_branch master 400'
+
+echo
+echo "builtin_worktrees_clean (orphan 判定):"
+check_id=worktrees-clean
+
+# 正常系: worktree を使っていない
+assert ok ".claude/worktrees が無い" \
+  bash -c 'git commit -q --allow-empty -m init'
+
+# 正常系: ディレクトリはあるが中身が無い
+assert ok ".claude/worktrees が空" \
+  bash -c 'git commit -q --allow-empty -m init && mkdir -p .claude/worktrees'
+
+# 失敗系: git に登録されていないディレクトリが残っている (worktree remove を忘れた状態)
+assert warn "git 未登録のディレクトリが残っている" \
+  bash -c 'git commit -q --allow-empty -m init && mkdir -p .claude/worktrees/leftover'
 
 check_id=adr-exists
 
