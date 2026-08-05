@@ -110,12 +110,24 @@ builtin_actions_default_permissions_read() {
   [ "$perm" = "read" ] && echo ok || echo fail
 }
 
+# 署名必須・直線履歴も ruleset と classic protection のどちらで設定していても成立とみなす
+# (ruleset だけを見ると classic 運用のリポで恒常的に誤検知する)
 builtin_main_signatures_required() {
-  has_rule required_signatures && echo ok || echo fail
+  if has_rule required_signatures; then echo ok; return; fi
+  if [ -n "$classic_json" ] \
+    && jq -e '.required_signatures.enabled // false' >/dev/null <<<"$classic_json"; then
+    echo ok; return
+  fi
+  echo fail
 }
 
 builtin_main_linear_history() {
-  has_rule required_linear_history && echo ok || echo fail
+  if has_rule required_linear_history; then echo ok; return; fi
+  if [ -n "$classic_json" ] \
+    && jq -e '.required_linear_history.enabled // false' >/dev/null <<<"$classic_json"; then
+    echo ok; return
+  fi
+  echo fail
 }
 
 # タグを打つリポだけの関心事。リリース済みタグの改変・削除を止める。

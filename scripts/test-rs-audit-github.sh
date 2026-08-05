@@ -13,7 +13,7 @@ trap 'rm -rf "$tmp"' EXIT
 
 failures=0
 
-# 1 項目だけの最小 manifest。gh-required-checks は builtin 判定
+# 最小 manifest。いずれも builtin 判定で、ruleset / classic protection の両方を見る 3 項目
 manifest="$tmp/standards.json"
 cat > "$manifest" <<'EOF'
 {
@@ -26,6 +26,24 @@ cat > "$manifest" <<'EOF'
       "level": "required",
       "applies_to": ["all"],
       "check": { "type": "builtin", "name": "required_checks_configured" },
+      "why": "テスト用",
+      "fix": "テスト用"
+    },
+    {
+      "id": "gh-signatures-required",
+      "layer": "github",
+      "level": "recommended",
+      "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "main_signatures_required" },
+      "why": "テスト用",
+      "fix": "テスト用"
+    },
+    {
+      "id": "gh-linear-history",
+      "layer": "github",
+      "level": "recommended",
+      "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "main_linear_history" },
       "why": "テスト用",
       "fix": "テスト用"
     }
@@ -112,6 +130,58 @@ dir="$tmp/case-none"
 git init -q -b main "$dir"
 assert_eq skip "$(run "$dir" env | jq -r 'select(.id == "gh-required-checks") | .status')" \
   "workflow が無ければ skip"
+
+echo
+echo "classic branch protection へのフォールバック (ruleset 未使用のリポ):"
+
+# ruleset は空。保護は classic branch protection 側にだけ入っている構成 (#51 の再現条件)
+gh_dir_classic="$tmp/gh-responses-classic"
+mkdir -p "$gh_dir_classic"
+cp "$gh_dir/repos_tester_dummy.json" "$gh_dir_classic/"
+echo '[]' > "$gh_dir_classic/repos_tester_dummy_rulesets.json"
+cat > "$gh_dir_classic/repos_tester_dummy_branches_main_protection.json" <<'EOF'
+{
+  "required_signatures": { "enabled": true },
+  "required_linear_history": { "enabled": true },
+  "required_status_checks": { "contexts": ["ci"] }
+}
+EOF
+
+dir="$tmp/case-classic"
+mkdir -p "$dir/.github/workflows"
+git init -q -b main "$dir"
+touch "$dir/.github/workflows/ci.yml"
+out=$(run "$dir" env FAKE_GH_DIR="$gh_dir_classic")
+assert_eq ok "$(jq -r 'select(.id == "gh-signatures-required") | .status' <<<"$out")" \
+  "classic の required_signatures で ok"
+assert_eq ok "$(jq -r 'select(.id == "gh-linear-history") | .status' <<<"$out")" \
+  "classic の required_linear_history で ok"
+assert_eq ok "$(jq -r 'select(.id == "gh-required-checks") | .status' <<<"$out")" \
+  "classic の required_status_checks で ok"
+
+# classic protection はあるが当該項目が無効: フォールバックが無条件 ok にならないことを見る
+gh_dir_off="$tmp/gh-responses-classic-off"
+mkdir -p "$gh_dir_off"
+cp "$gh_dir/repos_tester_dummy.json" "$gh_dir_off/"
+echo '[]' > "$gh_dir_off/repos_tester_dummy_rulesets.json"
+cat > "$gh_dir_off/repos_tester_dummy_branches_main_protection.json" <<'EOF'
+{
+  "required_signatures": { "enabled": false },
+  "required_linear_history": { "enabled": false }
+}
+EOF
+out=$(run "$dir" env FAKE_GH_DIR="$gh_dir_off")
+assert_eq warn "$(jq -r 'select(.id == "gh-signatures-required") | .status' <<<"$out")" \
+  "classic はあるが署名必須が無効なら warn"
+assert_eq warn "$(jq -r 'select(.id == "gh-linear-history") | .status' <<<"$out")" \
+  "classic はあるが直線履歴が無効なら warn"
+
+# ruleset も classic も無い素の状態
+out=$(run "$dir" env)
+assert_eq warn "$(jq -r 'select(.id == "gh-signatures-required") | .status' <<<"$out")" \
+  "保護なしなら署名必須は warn"
+assert_eq warn "$(jq -r 'select(.id == "gh-linear-history") | .status' <<<"$out")" \
+  "保護なしなら直線履歴は warn"
 
 echo
 echo "前提不足時の skip_all:"
