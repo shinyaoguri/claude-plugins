@@ -80,7 +80,7 @@ grep -q 'skip-item' <<<"$out" && fail "skip 項目を行に出している" \
   || ok "skip 項目は行に出さない"
 grep -q 'manual-item' <<<"$out" && fail "manual 項目を行に出している (LLM 判定に踏み込んでいる)" \
   || ok "manual 項目は行に出さず件数だけ数える"
-grep -q 'LLM 判定 1 件' <<<"$out" && ok "未実施の LLM 判定件数を次アクションに出す" \
+grep -q 'LLM 判定 1 件' <<<"$out" && ok "LLM 判定の件数を次アクションに出す" \
   || fail "LLM 判定件数が次アクションに無い: $out"
 
 echo

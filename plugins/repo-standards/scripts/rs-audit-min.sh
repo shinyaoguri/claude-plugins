@@ -67,7 +67,9 @@ case "$width" in ''|*[!0-9]*) echo "rs-audit-min: --width は 0 以上の整数"
         + (if $nomanifest then "正本 repo-standards.json が無い — setup リポのセットアップが先"
            elif $bad == 0 then "機械判定は逸脱なし"
            else "詳細と修正は /repo-audit → /repo-audit-fix" end)
-        + (if ($c.manual // 0) > 0 then " (LLM 判定 \($c.manual) 件は未実施)" else "" end) ]
+        # 「未実施」とは書かない。このスクリプトが判定しないのは常に真だが、呼び出し側
+        # (repo-audit-min スキル) は続けて rs-evidence.sh + 判定係で埋めるため
+        + (if ($c.manual // 0) > 0 then " (LLM 判定 \($c.manual) 件はこのスクリプトの対象外)" else "" end) ]
   | .[]
 '
 

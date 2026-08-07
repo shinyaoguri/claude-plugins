@@ -37,6 +37,7 @@ jobs:
           ./scripts/test-rs-audit-repo.sh
           ./scripts/test-rs-audit-github.sh
           ./scripts/test-rs-audit-min.sh
+          ./scripts/test-rs-evidence.sh
           ./scripts/test-rs-findings.sh
           ./scripts/test-rs-doctor-env.sh
           ./scripts/test-repo-settings.sh
