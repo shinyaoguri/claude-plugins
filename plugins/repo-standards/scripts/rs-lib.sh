@@ -6,7 +6,7 @@
 #   ② ~/.claude/repo-standards.json (主経路。setup リポの ansible が張る symlink)
 #   ③ ~/.setup/claude/repo-standards.json (playbook 未実行の新マシン向けフォールバック)
 #
-# 出力契約 (全 rs-*.sh 共通): JSON Lines。1 チェック = 1 行
+# 出力契約 (rs-audit-min.sh を除く全 rs-*.sh 共通): JSON Lines。1 チェック = 1 行
 #   {"id","layer","level","status","detail","fix"?}
 #   status: ok / ng (required 違反) / warn (recommended 違反・rejected 検出)
 #         / skip (対象外・前提不足。理由を detail に) / manual (LLM 判定へ委譲)
@@ -15,6 +15,8 @@
 #
 # この JSON Lines を保存し、LLM 判定 (verdict) と適用判断 (decision) を足して
 # 監査 → 修正へ引き渡すのが rs-findings.sh。行スキーマの拡張分はそちらの冒頭を参照。
+# rs-audit-min.sh はこの JSON Lines を人間 / LLM 向けの圧縮テキストへ畳む出口で、
+# トークン最小化のため出力契約から外れる (理由はそちらの冒頭を参照)。
 
 resolve_standards() {
   local p

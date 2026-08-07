@@ -8,9 +8,29 @@
 |---|---|---|
 | [metaphor-sketch](plugins/metaphor-sketch) | [metaphor](https://github.com/shinyaoguri/metaphor) でスケッチを書く人 | 観測ループ (observe→edit→verify) と watch→AI クライアントの起動順序の作法、`/metaphor-new` `/metaphor-doctor` (skill 4)、watch セッション検査 (SessionStart hook 1) |
 | [metaphor-contrib](plugins/metaphor-contrib) | [metaphor](https://github.com/shinyaoguri/metaphor) / [metaphor-cli](https://github.com/shinyaoguri/metaphor-cli) のコントリビュータ | クロスリポ契約・生成物の鮮度・リリース規約・CLI 拡張手順、`/contract-check` `/quick-issue` (skill 6) |
-| [repo-standards](plugins/repo-standards) | 自分の全リポジトリと各マシン | 個人の開発運用標準 ([setup](https://github.com/shinyaoguri/setup) の repo-standards.json が正本) — リポジトリ構成・GitHub 設定・マシン環境の監査と雛形生成、作業の記録 (Issue・PR へのスクショ添付・気付きの起票) の作法、`/repo-audit` `/repo-audit-fix` `/env-doctor` `/repo-bootstrap` `/gyazo-capture` `/report-issue` (skill 6) |
+| [repo-standards](plugins/repo-standards) | 自分の全リポジトリと各マシン | 個人の開発運用標準 ([setup](https://github.com/shinyaoguri/setup) の repo-standards.json が正本) — リポジトリ構成・GitHub 設定・マシン環境の監査と雛形生成、作業の記録 (Issue・PR へのスクショ添付・気付きの起票) の作法、`/repo-audit` `/repo-audit-min` `/repo-audit-fix` `/env-doctor` `/repo-bootstrap` `/gyazo-capture` `/report-issue` (skill 7) |
 
 いずれも対象リポジトリの正典ドキュメント (CLAUDE.md / AGENTS.md / DEVELOPMENT.md / CONTRACT.md) を複製せず、「いつ・何を読むか」を想起させる薄いルーターとして設計している (ドリフト防止)。
+
+### リポジトリ監査スキルの使い分けとトークン目安
+
+個人標準 (repo-standards.json、49 項目 = 機械判定 43 + LLM 判定 6) との突き合わせは 3 スキルに分かれている。**消費トークンが 2 桁違う**ので用途で選ぶ。
+
+| スキル | 何をするか | コスト目安 |
+|---|---|---|
+| `/repo-audit-min` | 機械判定 43 項目を圧縮して報告し、LLM 判定 6 項目は材料をスクリプトで集めてから **Haiku 1 本**に一括で任せる。findings 保存・修正提案はしない | メイン **1K 弱** + 判定係 **1 本**。概算 **$0.05 前後** |
+| `/repo-audit` | 同じ 49 項目を、LLM 判定は項目ごとの並列サブエージェントで深く判定し、結果を findings に保存して修正フローへ渡す | メイン **+10K 前後**、サブエージェント込みの累積 **300〜600K**。概算 **$1〜2** |
+| `/repo-audit-fix` | findings の未決項目を承認を取りながら修正する (リポ内ファイルは 1 PR にまとめ、GitHub 設定は定義ファイル経由、破壊的操作は提示のみ) | 修正件数しだい。`/repo-audit` と同等かそれ以上 |
+
+`/repo-audit-min` が 1 桁以上安いのは、**LLM を外したからではなく LLM の使い方を変えたから**。効いているのは 3 点:
+
+1. **材料を先に畳む** — `rs-evidence.sh` が ADR の状態行・`git log`・open Issue・設定ファイルの構造を決定論的に集めて渡す。判定材料は 12K → 約 4.8K トークンに縮み、判定係は探索のためのツール呼び出しをほぼしない
+2. **サブエージェントを 1 本に束ねる** — 1 本ごとに固定の初期コンテキスト (system prompt + ツール定義) を払うので、6 本に割るとその分が丸ごと 6 重になる
+3. **[Haiku 4.5](https://platform.claude.com/docs/en/about-claude/models/overview) を使う** — $1/$5 per MTok で、Opus 5 ($5/$25) の 5 分の 1
+
+代わりに落としているのは**判定の深さ**で、判定係が開けるファイルは 3 件までに制限してある。ADR の決定内容と実装の乖離のような、全文を突き合わせないと分からない項目は `/repo-audit` に劣る。`/repo-audit` の累積が大きいのは ADR 全文・CLAUDE.md・`.claude/` 配下を項目ごとに読むためで、**ADR の本数が支配的**。ただし findings は前回の判定を id 単位で引き継ぐため、**2 回目以降は status が変わった項目だけの再判定で済む**。
+
+日常の点検と多数のリポを続けて見るときは `/repo-audit-min`、新規リポの受け入れや腰を据えた棚卸しのときだけ `/repo-audit` — という使い分けを想定している。
 
 ## 使い方
 
