@@ -2,6 +2,11 @@
 # LLM 判定 (check.type == "llm") の材料をスクリプト側で先に集めて 1 本のテキストにまとめる。
 #
 #   bash rs-evidence.sh [id...]     # 省略時は正本の llm 項目すべて
+#   bash rs-evidence.sh --intent    # このリポが明示している設計意図の材料 (項目共通)
+#
+# --intent は項目ごとでなくリポ全体で 1 回集める材料。標準の指摘を当てたときに
+# リポ自身の設計意図と衝突しないかを判定するために使う (repo-audit の衝突判定)。
+# 全項目で同じものを配れるので、1 回実行して使い回す。
 #
 # なぜスクリプトで集めるのか: LLM 判定のコストの大半は「材料を探す探索」であって
 # 「材料を読む」ことではない。ls・git log・gh・jq で決定論的に取れるものを先に畳んで
@@ -133,7 +138,58 @@ evidence_claude_mcp_config_sane() {
   ' .mcp.json 2>/dev/null || echo "  (JSON として読めない)"
 }
 
+# ---- --intent: リポが明示している設計意図の材料 (項目共通) ----
+
+# 「意図」として扱うのはリポにコミットされた明示的な記述だけ。コードの雰囲気や
+# 慣習から推測した意図は、後から誰も検証できないので材料に載せない
+emit_intent() {
+  local f p
+  echo "### リポの設計意図 (この材料に書かれていることだけを意図として扱う)"
+  echo
+  echo "リポ種別の marker:"
+  for p in Package.swift package.json pyproject.toml go.mod Cargo.toml Gemfile \
+           .claude-plugin/marketplace.json; do
+    [ -e "$p" ] && echo "  $p"
+  done
+  echo
+  for f in CLAUDE.md CONTRIBUTING.md; do
+    if [ -f "$f" ]; then
+      echo "--- $f ($(wc -l < "$f" | tr -d ' ') 行、全文は先頭 $MAX_LINES 行) ---"
+      head -"$MAX_LINES" "$f"
+    else
+      echo "--- $f は無い ---"
+    fi
+    echo
+  done
+  if [ -f README.md ]; then
+    echo "--- README.md の見出し ($(wc -l < README.md | tr -d ' ') 行) ---"
+    grep -E '^#{1,3} ' README.md | head -30
+  else
+    echo "--- README.md は無い ---"
+  fi
+  echo
+  if p=$(adr_dir); then
+    echo "--- ADR で確定している設計判断 ($p) ---"
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      printf '  %s | %s\n' "$(basename "$f")" "$(grep -m1 '^# ' "$f" | sed 's/^# //')"
+    done < <(find "$p" -maxdepth 1 -type f -name '*.md' ! -name 'README.md' | sort)
+  else
+    echo "--- ADR は無い ---"
+  fi
+  echo
+  echo "--- リポ内で as-code 管理されている設定 ---"
+  for p in .github/repo-settings.json .github/workflows .claude/settings.json .mcp.json; do
+    [ -e "$p" ] && echo "  $p"
+  done
+}
+
 # ---- 出力 ----
+
+if [ "${1:-}" = "--intent" ]; then
+  emit_intent
+  exit 0
+fi
 
 ids=("$@")
 if [ ${#ids[@]} -eq 0 ]; then

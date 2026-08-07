@@ -311,6 +311,84 @@ got=$( cd "$d" && { line a ng required; line b warn; } | bash "$target" save >/d
 check "a" "$got" "level で絞れる (反証対象の抽出に使う)"
 
 echo
+echo "intent: 標準とリポの設計意図の衝突"
+
+# 機械判定の ng / warn も対象。LLM が文脈を持ち込める接点はここしかない
+d=$(newrepo)
+got=$( cd "$d" && { line a ng required; line b warn; line c ok; } | bash "$target" save >/dev/null
+       bash "$target" list --needs-intent-check | jq -r .id | tr '\n' ' ' )
+check "a b " "$got" "機械判定の ng / warn が衝突判定の対象になる (ok は入らない)"
+
+d=$(newrepo)
+got=$( cd "$d" && line a ng required | bash "$target" save >/dev/null
+       bash "$target" set --intent conflicts a >/dev/null 2>&1; echo $? )
+check "2" "$got" "--intent-note 無しの衝突判断は拒否する"
+
+d=$(newrepo)
+got=$( cd "$d" && line a ng required | bash "$target" save >/dev/null
+       bash "$target" set --intent maybe --intent-note "$EV" a >/dev/null 2>&1; echo $? )
+check "2" "$got" "intent の綴り違いは拒否する"
+
+d=$(newrepo)
+got=$( cd "$d" && line a ng required | bash "$target" save >/dev/null
+       bash "$target" set --intent conflicts --intent-note "$EV" a >/dev/null
+       bash "$target" list --needs-intent-check | wc -l | tr -d ' ' )
+check "0" "$got" "判定したら衝突判定待ちから外れる"
+
+# intent は verdict / status を上書きしない。上書きすると「標準から外れている」
+# こと自体が集計から消え、逸脱が理由なく常態化する
+d=$(newrepo)
+got=$( cd "$d" && line a ng required | bash "$target" save >/dev/null
+       bash "$target" set --intent conflicts --intent-note "$EV" a >/dev/null
+       bash "$target" summary | jq -r '[.ng, .conflicts, .pending] | join(",")' )
+check "1,1,1" "$got" "衝突と判定しても ng・未決のまま残る (逸脱を見えなくしない)"
+
+d=$(newrepo)
+got=$( cd "$d" && { line a ng required; line b warn; } | bash "$target" save >/dev/null
+       bash "$target" set --intent conflicts --intent-note "$EV" a >/dev/null
+       bash "$target" set --intent aligned --intent-note "$EV" b >/dev/null
+       bash "$target" list --intent conflicts | jq -r .id )
+check "a" "$got" "intent で絞れる (修正フローが提示のみの群を抽出する)"
+
+# 標準に適合したのに古い衝突理由が残ると、次の逸脱時に的外れな理由が付いて回る
+d=$(newrepo)
+got=$( cd "$d" && line a ng required | bash "$target" save >/dev/null
+       bash "$target" set --intent conflicts --intent-note "$EV" a >/dev/null
+       line a ok required | bash "$target" save >/dev/null
+       bash "$target" list | jq -r '.intent // "-"' )
+check "-" "$got" "標準に適合したら衝突判断は落ちる"
+
+# 逸脱が続いている間は引き継ぐ (毎回同じ判定をやり直させない)
+d=$(newrepo)
+got=$( cd "$d" && line a ng required | bash "$target" save >/dev/null
+       bash "$target" set --intent conflicts --intent-note "$EV" a >/dev/null
+       line a ng required | bash "$target" save >/dev/null
+       bash "$target" list | jq -r .intent )
+check "conflicts" "$got" "再監査で status が同じなら衝突判断は引き継ぐ"
+
+d=$(newrepo)
+got=$( cd "$d" && line a manual required | bash "$target" save >/dev/null
+       bash "$target" set --verdict ng --evidence "$EV" a >/dev/null
+       bash "$target" list --needs-intent-check | jq -r .id )
+check "a" "$got" "LLM 判定で ng になった項目も衝突判定の対象になる"
+
+# 標準を満たしていると判定し直した項目に衝突理由が残ると、同じセッションの
+# レポートが「ok なのに意図と衝突」という読めない行を出す
+d=$(newrepo)
+got=$( cd "$d" && line a manual required | bash "$target" save >/dev/null
+       bash "$target" set --verdict ng --evidence "$EV" a >/dev/null
+       bash "$target" set --intent conflicts --intent-note "$EV" a >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" a >/dev/null
+       bash "$target" list | jq -r '.intent // "-"' )
+check "-" "$got" "ok へ再判定したら衝突判断もその場で落ちる (save を待たない)"
+
+d=$(newrepo)
+got=$( cd "$d" && line a ng required | bash "$target" save >/dev/null
+       bash "$target" summary | jq -r .hint )
+check "衝突判定待ち 1 件 — fix がリポの設計意図と衝突しないか確かめて set --intent で記録する" "$got" \
+  "衝突判定待ちが残っていれば集計が次アクションに出す"
+
+echo
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures 件"
   exit 1

@@ -1,6 +1,6 @@
 ---
 name: repo-audit
-description: "cwd のリポジトリを個人標準 (setup リポの repo-standards.json) と突き合わせて精度優先で監査する。GitHub 設定・リポ構成ファイル・.claude 設定の 3 層を機械判定 + LLM 判定でレポートし、必須項目と指摘は独立した判定者の反証を通してから findings に保存し、修正シーケンス (repo-audit-fix) へ引き渡す。Use when auditing a repository against personal standards, checking GitHub repo settings, or reviewing repository structure and Claude configuration."
+description: "cwd のリポジトリを個人標準 (setup リポの repo-standards.json) と突き合わせて精度優先で監査する。GitHub 設定・リポ構成ファイル・.claude 設定の 3 層を機械判定 + LLM 判定でレポートし、必須項目と指摘は独立した判定者の反証を通し、さらに標準に合わせることがリポ自身の設計意図と衝突しないかを判定してから findings に保存して修正シーケンス (repo-audit-fix) へ引き渡す。Use when auditing a repository against personal standards, checking GitHub repo settings, or reviewing repository structure and Claude configuration."
 ---
 
 cwd が git リポジトリでなければ「git リポジトリ内で実行してください」と伝えて終了する。
@@ -35,13 +35,25 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
 
    overturned で書き戻すと `verified` が落ちるので、その項目は再び反証待ちに戻る。**同じ項目が 2 回覆ったら 3 回目を回さず**、両方の判定と根拠を併記してユーザーに判断を仰ぐ (判定が振動しているのは観点かリポの状態が曖昧なサインで、回し続けても収束しない)
 
-4. レポートを提示する: `_meta` 行 (kind / repo / visibility) をヘッダに、層ごとの表 (項目 | 判定 | 詳細)。LLM 判定の行には根拠を添え、**反証で覆った項目は覆る前後を併記する** (どこで判断が変わったかが監査の価値になる)。末尾に `bash "$P/rs-findings.sh" summary` の集計 (必須 NG / 推奨 WARN / 未決 / 反証待ち / skip)
+4. **衝突判定** — 対象は `bash "$P/rs-findings.sh" list --needs-intent-check` (標準から外れている項目のうち、まだ意図と突き合わせていないもの)。**機械判定の ng / warn もここに含まれる** — この標準は全リポ共通のルールであって個別のリポで最適とは限らず、機械判定 43 項目に文脈が入る接点はここしかない
 
-5. 未決 (pending) が残っていれば repo-audit-fix スキルへ進み、修正シーケンスに入る。ユーザーが監査だけを求めているときを除き、報告で終わらせない
+   材料は `bash "$P/rs-evidence.sh" --intent` を**1 回だけ**実行して使い回す (項目ごとに変わらないため)。項目ごとに並列で standards-intent-judge へ委譲し (`subagent_type: "repo-standards:standards-intent-judge"`)、指摘 (id / level / detail / fix) と材料を渡す:
+
+   ```bash
+   bash "$P/rs-findings.sh" set --intent <aligned|unclear|conflicts> --intent-note "<返ってきた REASON>" <id>
+   ```
+
+   **intent は verdict を上書きしない。** 標準から外れているという事実と、それがこのリポでは正しい逸脱かもしれないという文脈は別物で、後者で前者を消すと「外れていること」自体が見えなくなる
+
+5. レポートを提示する: `_meta` 行 (kind / repo / visibility) をヘッダに、層ごとの表 (項目 | 判定 | 意図 | 詳細)。LLM 判定の行には根拠を添え、**反証で覆った項目は覆る前後を併記する** (どこで判断が変わったかが監査の価値になる)。`intent` が `conflicts` / `unclear` の項目は**理由をそのまま載せる** — 「標準には合っていないが、このリポではこう決めている」が読み取れる形にする。末尾に `bash "$P/rs-findings.sh" summary` の集計 (必須 NG / 推奨 WARN / 意図と衝突 / 未決 / 反証待ち / skip)
+
+6. 未決 (pending) が残っていれば repo-audit-fix スキルへ進み、修正シーケンスに入る。ユーザーが監査だけを求めているときを除き、報告で終わらせない
 
 ## 途中で止まっても再開できる
 
-手順 2 と 3 の状態はすべて findings に載る。セッションが尽きたら、次回は `summary` の `manual_unjudged` と `unverified` を見て続きから入る — `--needs-verdict` は未判定と陳腐化した判定を、`--needs-verify` は判定済みで反証を通っていないものを返す。判定を書き換えると `verified` が落ちるので、覆した項目を反証済みと取り違えることはない。
+手順 2〜4 の状態はすべて findings に載る。セッションが尽きたら、次回は `summary` の `manual_unjudged` / `unverified` / `intent_unchecked` を見て続きから入る — `--needs-verdict` は未判定と陳腐化した判定を、`--needs-verify` は判定済みで反証を通っていないものを、`--needs-intent-check` は標準から外れていて意図と突き合わせていないものを返す。判定を書き換えると `verified` が落ちるので、覆した項目を反証済みと取り違えることはない。
+
+衝突判定は HEAD では陳腐化させない (設計意図はコミットごとに変わるものではなく、毎回無効化するとコストが跳ねるだけ)。項目が標準に適合すれば `intent` は自動で落ちる。設計意図そのものが変わったときだけ、ユーザーの指示で付け直す。
 
 ## 詳細の在処
 
