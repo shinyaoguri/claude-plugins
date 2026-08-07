@@ -77,7 +77,10 @@ evidence_work_log_externalized() {
     echo "(gh が無い / 未認証のため Issue・PR を確認できない)"
   fi
   echo "計画文書の候補:"
-  ls -1 ROADMAP.md docs/roadmap.md docs/plan.md 2>/dev/null | sed 's/^/  /' || true
+  # 候補が 1 つも無いのは正常なので終了ステータスは見ない。成功を強制するイディオムは
+  # 付けない — このスクリプトは set -e ではないので不要なうえ、guardrail の
+  # 「検査の素通し」検出に引っかかり、本物の握り潰しと区別がつかなくなる
+  ls -1 ROADMAP.md docs/roadmap.md docs/plan.md 2>/dev/null | sed 's/^/  /'
   find docs -maxdepth 2 -type d 2>/dev/null | sed 's/^/  dir: /' | head -10
 }
 
