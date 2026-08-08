@@ -74,6 +74,48 @@ else
 fi
 
 echo
+echo "env-git-fetch-prune / env-git-gone-alias (squash 運用のローカルブランチ掃除):"
+
+# assert_git <id> <期待 status> <ケース名> <グローバル gitconfig の中身>
+# $GIT_CONFIG_GLOBAL でグローバル設定を差し替え、実マシンの ~/.gitconfig に依存させない。
+# 出力契約 (warn を出すなら level は recommended) もあわせて検証する
+assert_git() {
+  local id=$1 want=$2 name=$3 conf=$4
+  local gc="$tmp/gitconfig-$RANDOM"
+  printf '%s\n' "$conf" > "$gc"
+  local got
+  got=$( GIT_CONFIG_GLOBAL="$gc" RS_GH_AUTH_STATUS="(認証情報なし)" bash "$target" \
+    | jq -r --arg id "$id" 'select(.id == $id) | "\(.level)/\(.status)"' )
+
+  if [ "$got" = "recommended/$want" ]; then
+    echo "  [ok]   $name → $got"
+  else
+    echo "  [FAIL] $name → 期待 recommended/$want / 実際 ${got:-出力なし}"
+    failures=$((failures + 1))
+  fi
+}
+
+configured='[fetch]
+	prune = true
+[alias]
+	gone = !git fetch -pq && git for-each-ref
+	gone-clean = !git gone | while read -r b; do git branch -D "$b"; done'
+
+assert_git env-git-fetch-prune ok "fetch.prune = true" "$configured"
+assert_git env-git-gone-alias  ok "エイリアス両方あり" "$configured"
+
+assert_git env-git-fetch-prune warn "設定が空 (未設定)" ""
+assert_git env-git-gone-alias  warn "設定が空 (未設定)" ""
+
+# 明示的な false は「未設定」と別経路だが同じく warn (境界値)
+assert_git env-git-fetch-prune warn "fetch.prune = false" '[fetch]
+	prune = false'
+
+# 片方だけでは棚卸しが完結しないので warn (境界値)
+assert_git env-git-gone-alias warn "gone だけあり gone-clean が無い" '[alias]
+	gone = !git for-each-ref'
+
+echo
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures 件"
   exit 1
