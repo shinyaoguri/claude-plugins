@@ -52,6 +52,7 @@
     "claude/CLAUDE.md",
     "claude/settings.json",
     "tasks/claude.yml",
+    "tasks/git.yml",
     "playbook_sillicon_mac.yml"
   ],
   "shinyaoguri/claude-plugins": [

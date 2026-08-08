@@ -172,7 +172,36 @@ else
   fi
 fi
 
-# ---- 7. チェックリスト正本の解決 ----
+# ---- 7. squash 運用で残るローカルブランチを掃除できる git 設定か ----
+# 個人標準は squash merge を required にしているが、squash は feature ブランチの
+# コミット群を main 上の別コミットへ畳むため、git branch -d / --merged では役目終了を
+# 判定できない (元コミットが main の祖先にならない)。確実に効くシグナルは
+# upstream:track == [gone] だけで、これは remote-tracking の prune が前提になる。
+# どちらもリポでなくマシン共通の git 設定なので env 層で見る
+# (正本: setup リポの tasks/git.yml。経緯: claude-plugins#67)
+git_fix="setup リポで ansible-playbook playbook_sillicon_mac.yml --tags git を実行する"
+prune=$(git config --global --get fetch.prune 2>/dev/null) || prune=""
+if [ "$prune" = "true" ]; then
+  emit env-git-fetch-prune env recommended ok "fetch.prune = true (fetch のたび remote-tracking を prune する)"
+else
+  emit env-git-fetch-prune env recommended warn \
+    "git config --global fetch.prune が ${prune:-未設定} — 消えたリモートブランチの remote-tracking が残り、ローカルブランチの gone 判定が効かない" \
+    "$git_fix"
+fi
+
+missing=""
+for a in gone gone-clean; do
+  git config --global --get "alias.$a" >/dev/null 2>&1 || missing="$missing $a"
+done
+if [ -z "$missing" ]; then
+  emit env-git-gone-alias env recommended ok "alias.gone / alias.gone-clean が設定済み (役目を終えたローカルブランチの一覧と削除)"
+else
+  emit env-git-gone-alias env recommended warn \
+    "git のエイリアスが未設定 ($missing) — squash merge 後に残るローカルブランチを棚卸しする手立てが無い" \
+    "$git_fix"
+fi
+
+# ---- 8. チェックリスト正本の解決 ----
 if manifest=$(resolve_standards); then
   emit env-standards-manifest env recommended ok "正本: $manifest"
 else
