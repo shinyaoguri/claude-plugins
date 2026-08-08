@@ -151,6 +151,40 @@ n=$(grep -c '^### ' <<<"$out")
   || fail "ブロック数が想定外 → $n"
 
 echo
+echo "--intent: 設計意図の材料 (項目共通)"
+
+dir=$(mk_repo intent bash -c '
+  mkdir -p docs/decisions .github
+  printf "# 規約\n\n## 検証\n\nbash scripts/test.sh で回す\n" > CLAUDE.md
+  printf "# タイトル\n\n## 使い方\n" > README.md
+  printf "# 0001: 設定を as-code で管理する\n\n- **状態**: 採用\n" > docs/decisions/0001-x.md
+  printf "{}\n" > .github/repo-settings.json
+  git add -A && git commit -q -m init') || exit 1
+out=$(run "$dir" --intent)
+
+grep -q 'bash scripts/test.sh で回す' <<<"$out" \
+  && ok "CLAUDE.md は全文を渡す (意図の一次資料なので要約しない)" || fail "CLAUDE.md 本文が無い"
+grep -q '0001: 設定を as-code で管理する' <<<"$out" \
+  && ok "ADR のタイトルを渡す (確定した設計判断が衝突判定の要)" || fail "ADR が無い"
+grep -q '^--- CONTRIBUTING.md は無い ---$' <<<"$out" \
+  && ok "無いファイルは「無い」と明示する (判定側に推測させない)" || fail "不在の明示が無い"
+grep -q '  .github/repo-settings.json' <<<"$out" \
+  && ok "as-code 管理されている設定を列挙する" || fail "as-code 設定が無い"
+# README 全文まで渡すと材料が肥大する。意図は見出しで足りる
+grep -q '^## 使い方$' <<<"$out" && ok "README は見出しだけ渡す" || fail "README の見出しが無い"
+
+if printf '%s' "$out" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1; then
+  ok "UTF-8 として妥当"
+else
+  fail "UTF-8 が壊れている"
+fi
+
+# 意図の材料は全項目に配るので、肥大するとそのまま件数倍のコストになる
+bytes=$(printf '%s' "$out" | wc -c | tr -d ' ')
+[ "$bytes" -lt 20000 ] && ok "材料は ${bytes} バイト (< 20000)" \
+  || fail "意図の材料が肥大している → ${bytes} バイト"
+
+echo
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures 件"
   exit 1

@@ -5,9 +5,11 @@
 #   { bash rs-audit-repo.sh; bash rs-audit-github.sh; } | bash rs-findings.sh save
 #   bash rs-findings.sh list [--status ng,warn] [--decision pending] [--layer repo]
 #                            [--level required] [--needs-verdict] [--needs-verify]
+#                            [--needs-intent-check] [--intent conflicts]
 #   bash rs-findings.sh set --decision approved <id>...
 #   bash rs-findings.sh set --verdict warn --evidence "..." <id>
 #   bash rs-findings.sh set --verified --evidence "反証の結果..." <id>
+#   bash rs-findings.sh set --intent conflicts --intent-note "衝突の理由..." <id>
 #   bash rs-findings.sh summary
 #   bash rs-findings.sh path
 #
@@ -20,9 +22,17 @@
 #   evidence  その判定の根拠。verdict を書くときは必須 (下記)
 #   head      verdict を付けたときの HEAD。現在の HEAD と違えば判定は陳腐化したとみなす
 #   verified  独立した判定者による反証を通ったか。verdict を書き換えると落ちる
+#   intent    その指摘の fix を当てたとき、リポ自身が明示している設計意図と衝突するか
+#             aligned (衝突しない) / unclear (判断がつかない) / conflicts (衝突する)
+#   intent_note  その判断の理由
 #   decision  pending (未決) / approved (適用してよい) / rejected (直さないと決めた)
 #             / applied (適用済み) / deferred (今回は見送り。Issue へ引き継ぐ)
 #   note      decision の理由
+#
+# intent は verdict を上書きしない。標準に合っていないという事実 (ng / warn) と、
+# それがこのリポでは正しい逸脱かもしれないという文脈は別物で、後者で前者を消すと
+# 「標準から外れている」こと自体が見えなくなる。intent は repo-audit-fix が
+# 適用の扱いを変えるための材料として載る。
 #
 # 判定を記録するときの決定論的な制約 (文書ルールでなくここで強制する):
 #   - **verdict には evidence が必須**。20 バイト以上を求める (「ok」「問題なし」のような
@@ -99,7 +109,8 @@ cmd_save() {
     | $new
       + (if ($old.status // "") == $new.status
          then ({verdict: $old.verdict, evidence: $old.evidence, head: $old.head,
-                verified: $old.verified, decision: $old.decision, note: $old.note}
+                verified: $old.verified, intent: $old.intent, intent_note: $old.intent_note,
+                decision: $old.decision, note: $old.note}
                | with_entries(select(.value != null)))
          else {} end)
     # 実効 status: manual に判定が付いていれば判定の方が実態を表す
@@ -112,7 +123,9 @@ cmd_save() {
          else del(.decision, .note) end)
       elif .status == "ng" or .status == "warn" then
         (if has("decision") then . else . + {decision: "pending"} end)
-      else del(.decision, .note, .verdict, .evidence, .head, .verified) end
+      # 標準に適合した項目に衝突判断が残っていると、次の逸脱時に古い理由が付いて回る。
+      # manual 行の verdict が ok / skip へ変わる経路は cmd_set 側で落としている
+      else del(.decision, .note, .verdict, .evidence, .head, .verified, .intent, .intent_note) end
   ' > "$file.tmp" && mv "$file.tmp" "$file"
 
   cmd_summary
@@ -120,15 +133,17 @@ cmd_save() {
 
 # ---- list: 条件で絞って JSON Lines を返す ----
 cmd_list() {
-  local status="" decision="" layer="" level="" needs=0 verify=0
+  local status="" decision="" layer="" level="" intent="" needs=0 verify=0 intentchk=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --status) status=${2:-}; shift 2 ;;
       --decision) decision=${2:-}; shift 2 ;;
       --layer) layer=${2:-}; shift 2 ;;
       --level) level=${2:-}; shift 2 ;;
+      --intent) intent=${2:-}; shift 2 ;;
       --needs-verdict) needs=1; shift ;;
       --needs-verify) verify=1; shift ;;
+      --needs-intent-check) intentchk=1; shift ;;
       *) echo "rs-findings: 不明な引数: $1" >&2; exit 2 ;;
     esac
   done
@@ -136,7 +151,8 @@ cmd_list() {
   # 行を $r に束縛してから絞る。`split(",") | index(.status)` と書くと index の中の
   # `.` がパイプ左の配列を指してしまい "Cannot index array with string" で落ちる
   jq -c --arg s "$status" --arg d "$decision" --arg l "$layer" --arg lv "$level" \
-        --arg head "$(head_now)" --argjson needs "$needs" --argjson verify "$verify" '
+        --arg it "$intent" --arg head "$(head_now)" \
+        --argjson needs "$needs" --argjson verify "$verify" --argjson intentchk "$intentchk" '
     . as $r
     | (if $r.status == "manual" and ($r.verdict // "") != "" then $r.verdict else $r.status end) as $eff
     | select($s == "" or (($s | split(",")) | index($eff)))
@@ -151,18 +167,25 @@ cmd_list() {
         $r.status == "manual" and ($r.verdict // "") != "" and ($r.head == $head)
         and (($r.verified // false) | not)
         and ($r.level == "required" or $eff == "ng" or $eff == "warn")))
+    | select($it == "" or (($it | split(",")) | index($r.intent // "")))
+    # 衝突判定待ち: 標準から外れている項目のうち、まだ意図と突き合わせていないもの。
+    # 機械判定の ng / warn も対象に含む — LLM が文脈を持ち込める唯一の接点なので
+    | select($intentchk == 0 or (
+        ($eff == "ng" or $eff == "warn") and (($r.intent // "") == "")))
   ' "$file"
 }
 
 # ---- set: 判定・判断を書き込む ----
 cmd_set() {
-  local decision="" verdict="" evidence="" note="" verified=0 ids="" id
+  local decision="" verdict="" evidence="" note="" intent="" intent_note="" verified=0 ids="" id
   while [ $# -gt 0 ]; do
     case "$1" in
       --decision) decision=${2:-}; shift 2 ;;
       --verdict)  verdict=${2:-};  shift 2 ;;
       --evidence) evidence=${2:-}; shift 2 ;;
       --note)     note=${2:-};     shift 2 ;;
+      --intent)      intent=${2:-};      shift 2 ;;
+      --intent-note) intent_note=${2:-}; shift 2 ;;
       --verified) verified=1;      shift ;;
       --*) echo "rs-findings: 不明な引数: $1" >&2; exit 2 ;;
       *) ids="$ids $1"; shift ;;
@@ -180,6 +203,22 @@ cmd_set() {
     ""|ok|warn|ng|skip) ;;
     *) echo "rs-findings: verdict は ok/warn/ng/skip のいずれか: $verdict" >&2; exit 2 ;;
   esac
+  case "$intent" in
+    ""|aligned|unclear|conflicts) ;;
+    *) echo "rs-findings: intent は aligned/unclear/conflicts のいずれか: $intent" >&2; exit 2 ;;
+  esac
+
+  # 衝突の判断にも理由を必須にする。conflicts が理由なしで付くと、修正フローが
+  # 「なぜ当てないのか」を説明できないまま項目を提示のみに落とすことになる
+  if [ -n "$intent" ]; then
+    local ibytes
+    ibytes=$(printf '%s' "$intent_note" | wc -c | tr -d ' ')
+    if [ "$ibytes" -lt "$MIN_EVIDENCE_BYTES" ]; then
+      echo "rs-findings: --intent には --intent-note が必須 (${MIN_EVIDENCE_BYTES} バイト以上)。" >&2
+      echo "  リポのどの記述と衝突する / しないのかを書く: CLAUDE.md の該当節・ADR 番号など" >&2
+      exit 2
+    fi
+  fi
 
   # 判定には根拠を必須にする。接地しない判定を記録に残さないための決定論的なガードで、
   # 「後で書けばいい」を許すと結局書かれないまま次のセッションへ渡ることになる
@@ -203,7 +242,7 @@ cmd_set() {
   idsjson=$(printf '%s\n' $ids | jq -R . | jq -sc .)
   jq -c --argjson ids "$idsjson" --arg d "$decision" --arg v "$verdict" \
         --arg e "$evidence" --arg n "$note" --arg head "$(head_now)" \
-        --argjson verified "$verified" '
+        --arg it "$intent" --arg itn "$intent_note" --argjson verified "$verified" '
     . as $r
     | if ($ids | index($r.id)) then
       # verdict を書き換えたら verified は一旦落とす。同じ呼び出しで --verified も
@@ -213,11 +252,15 @@ cmd_set() {
         + (if $e != "" then {evidence: $e} else {} end)
         + (if $n != "" then {note: $n} else {} end)
         + (if $verified == 1 then {verified: true} else {} end)
+        + (if $it != "" then {intent: $it, intent_note: $itn} else {} end)
       # decision は判定に追従させる。repo-audit-fix は decision:pending を拾うので、
       # 直すものが無い判定を未決に残せば承認の要らない項目が並び、逆に反証で
       # ok → warn へ戻した項目を未決に復帰させないと修正フローから丸ごと落ちる
+      # 衝突判断も同時に落とす。標準を満たしていると判定し直した項目に「意図と
+      # 衝突するので当てない」が付いたままだと、同じセッションのレポートが
+      # 「ok なのに衝突」という読めない行を出す (save まで待たせない)
       | if (.verdict // "") == "ok" or (.verdict // "") == "skip" then
-          del(.decision, .note)
+          del(.decision, .note, .intent, .intent_note)
         elif (.verdict // "") == "ng" or (.verdict // "") == "warn" then
           (if has("decision") then . else . + {decision: "pending"} end)
         else . end
@@ -242,6 +285,9 @@ cmd_summary() {
                   and ((.verified // false) | not)
                   and (.level == "required" or ._eff == "ng" or ._eff == "warn")))
        | length) as $unverified
+    | (map(select((._eff == "ng" or ._eff == "warn") and ((.intent // "") == "")))
+       | length) as $intent_unchecked
+    | (map(select(.intent == "conflicts")) | length) as $conflicts
     # 適用したのに status が変わらない項目。再監査で status が動けば decision は
     # 引き継がれず消えるので、ここに残るのは「直したつもりで直っていない」だけ
     | (map(select(.decision == "applied" and (._eff == "ng" or ._eff == "warn"))) | length) as $unresolved
@@ -250,6 +296,8 @@ cmd_summary() {
        warn:     (map(select(._eff == "warn")) | length),
        manual_unjudged: $mp,
        unverified: $unverified,
+       intent_unchecked: $intent_unchecked,
+       conflicts: $conflicts,
        pending:  $pending,
        approved: (map(select(.decision == "approved")) | length),
        applied:  (map(select(.decision == "applied"))  | length),
@@ -260,7 +308,9 @@ cmd_summary() {
          (if length == 0 then "findings が空 (先に監査を実行する)"
           elif $mp > 0 then "manual \($mp) 件が未判定 — 判定して rs-findings.sh set --verdict で記録する"
           elif $unverified > 0 then "反証待ち \($unverified) 件 — 独立した判定者に覆せるか確かめて set --verified で記録する"
+          elif $intent_unchecked > 0 then "衝突判定待ち \($intent_unchecked) 件 — fix がリポの設計意図と衝突しないか確かめて set --intent で記録する"
           elif $unresolved > 0 then "適用済みだが解消していない項目が \($unresolved) 件 — 適用内容を見直す"
+          elif $conflicts > 0 and $pending > 0 then "未決 \($pending) 件 (うち意図と衝突 \($conflicts) 件) — repo-audit-fix へ。衝突する項目は適用せず提示のみにする"
           elif $pending > 0 then "未決 \($pending) 件 — repo-audit-fix スキルで承認・適用できる"
           else "未決の指摘なし" end)}
   ' "$file"
