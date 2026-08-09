@@ -2,6 +2,7 @@
 name: repo-bootstrap
 description: "新規リポジトリを個人標準 (setup リポの repo-standards.json) どおりに対話的に雛形生成する。構成ファイルの生成 → 初回コミット → GitHub 作成と設定適用まで。Use when creating a new repository or initializing an existing directory to personal standards."
 argument-hint: "[path] [--kind <swift|web|python|generic>]"
+allowed-tools: "Bash(jq:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-github.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-min.sh:*)"
 ---
 
 新しいリポジトリの雛形を個人標準どおりに作る。既存リポの監査は /repo-audit を使う (このスキルは生成が目的)。
@@ -23,8 +24,14 @@ argument-hint: "[path] [--kind <swift|web|python|generic>]"
    ```
 
 3. `git init` (default branch は main) → 各項目の `fix` の方針に沿ってファイルを生成 → 初回コミット。新規リポなのでこの初回コミットだけ main 直コミットでよい
-4. ユーザーが望めば `gh repo create` + push し、`bash "${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-github.sh"` の NG 項目の fix コマンドを提示 → 承認後に適用する
-5. 仕上げに /repo-audit の手順どおり監査を一巡し、green を確認する (判定ロジックをここに複製しない)
+4. ユーザーが望めば `gh repo create` + push し、`bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-github.sh` の NG 項目の fix コマンドを提示 → 承認後に適用する
+5. 仕上げに簡易監査で green を確認する (判定ロジックをここに複製しない):
+
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-min.sh
+   ```
+
+   逸脱が残っていれば項目を示し、対処は /repo-audit へ渡す。**生成直後に本監査 (repo-audit) は回さない** — 標準どおりに作った直後で逸脱はほぼ無く、反証まで通す本監査を通すコストに見合わない
 
 ## 詳細の在処
 
