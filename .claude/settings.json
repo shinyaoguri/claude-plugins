@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/check-consistency.sh:*)",
+      "Bash(./scripts/check-deprecated-patterns.sh:*)",
+      "Bash(./scripts/check-guardrail-weakening.sh:*)",
+      "Bash(./scripts/check-pr-title.sh:*)",
+      "Bash(./scripts/check-upstream-refs.sh:*)",
+      "Bash(./scripts/check-version-bump.sh:*)",
+      "Bash(./scripts/test-guardrail-weakening.sh:*)",
+      "Bash(./scripts/test-repo-settings.sh:*)",
+      "Bash(./scripts/test-rs-audit-github.sh:*)",
+      "Bash(./scripts/test-rs-audit-min.sh:*)",
+      "Bash(./scripts/test-rs-audit-repo.sh:*)",
+      "Bash(./scripts/test-rs-doctor-env.sh:*)",
+      "Bash(./scripts/test-rs-evidence.sh:*)",
+      "Bash(./scripts/test-rs-findings.sh:*)",
+      "Bash(./scripts/test-upsert-pr-comment.sh:*)",
+      "Bash(./scripts/test-upstream-refs.sh:*)",
+      "Bash(./scripts/apply-repo-settings.sh)",
+      "Bash(claude plugin validate:*)",
+      "Bash(jq:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git worktree list)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh workflow list:*)"
+    ]
+  }
+}
