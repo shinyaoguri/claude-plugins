@@ -288,6 +288,69 @@ assert ok ".claude/worktrees が空" \
 assert warn "git 未登録のディレクトリが残っている" \
   bash -c 'git commit -q --allow-empty -m init && mkdir -p .claude/worktrees/leftover'
 
+echo
+echo "builtin_worktrees_clean (容量と安全に消せる候補):"
+
+# しきい値 (本体 + 3) を超える worktree を用意し、消せる / 消せないを 1 リポに揃える。
+#   gone-clean    : upstream が消えていて未コミットの変更も無い     → 候補
+#   gone-dirty    : upstream は消えているが未コミットの変更がある   → 候補外
+#   gone-env      : upstream は消えているが .env (ignored) を持つ   → 候補外 (再生成できない)
+#   alive         : upstream が生きている (作業中)                  → 候補外
+wt_dir="$tmp/worktrees"
+mkdir -p "$wt_dir"
+(
+  cd "$wt_dir" && git init -q -b main && git commit -q --allow-empty -m init &&
+  echo ".env" > .gitignore && git add -A && git commit -q -m gitignore &&
+  mkdir -p .claude/worktrees && git remote add origin . &&
+  for b in gone-clean gone-dirty gone-env alive; do
+    git branch -q "$b"
+    # upstream は config で直接張る (--set-upstream-to は remote-tracking ref を
+    # 手で作っただけでは「ブランチではない」と拒否される)
+    git config "branch.$b.remote" origin
+    git config "branch.$b.merge" "refs/heads/$b"
+    git worktree add -q ".claude/worktrees/$b" "$b"
+  done &&
+  # alive だけ remote-tracking ref を残す。他は PR がマージされて head ブランチが
+  # 削除された後の状態 (upstream:track → [gone])
+  git update-ref refs/remotes/origin/alive HEAD &&
+  echo dirty > .claude/worktrees/gone-dirty/uncommitted.txt &&
+  echo "K=v" > .claude/worktrees/gone-env/.env
+) >/dev/null 2>&1
+line=$( cd "$wt_dir" && REPO_STANDARDS_JSON="$manifest" bash "$target" \
+  | jq -c 'select(.id == "worktrees-clean")' )
+got=$(jq -r .status <<<"$line")
+detail=$(jq -r .detail <<<"$line")
+
+if [ "$got" = warn ]; then
+  echo "  [ok]   しきい値を超えた worktree → warn"
+else
+  echo "  [FAIL] しきい値を超えた worktree → 期待 warn / 実際 $got"
+  failures=$((failures + 1))
+fi
+
+if grep -qE '[0-9]+ MB' <<<"$detail"; then
+  echo "  [ok]   個数だけでなく容量を添える → $(grep -oE '[0-9]+ MB' <<<"$detail")"
+else
+  echo "  [FAIL] 容量が detail に無い → $detail"
+  failures=$((failures + 1))
+fi
+
+if grep -q 'gone-clean' <<<"$detail"; then
+  echo "  [ok]   upstream が [gone] で clean な worktree を候補に挙げる"
+else
+  echo "  [FAIL] gone-clean が候補に無い → $detail"
+  failures=$((failures + 1))
+fi
+
+for ng in gone-dirty gone-env alive; do
+  if grep -q "$ng" <<<"$detail"; then
+    echo "  [FAIL] $ng を候補に挙げてはいけない → $detail"
+    failures=$((failures + 1))
+  else
+    echo "  [ok]   $ng は候補に挙げない"
+  fi
+done
+
 check_id=adr-exists
 
 echo
