@@ -2,6 +2,7 @@
 name: report-issue
 description: "repo-standards プラグインの利用中に起きた問題 (スキル・同梱スクリプトのエラー、記述と実態のずれ、使いにくさ・改善アイデア) を shinyaoguri/claude-plugins へ気軽に Issue 起票する。Use when a repo-standards skill or bundled script fails or behaves unexpectedly, when plugin instructions don't match reality, or when reporting problems or improvement ideas about the repo-standards plugin."
 argument-hint: "[問題・気付きの内容]"
+allowed-tools: "Bash(gh issue list:*)"
 ---
 
 「気付きは Issue へ」文化の実行支援。repo-standards プラグインで起きた問題を、その場で直そうとせずに起票して本題へ戻る。**完璧な報告より気軽な報告を優先する** — 原因が分からなくても、確信が持てなくても、状況をそのまま書けばよい。内容: `$ARGUMENTS`
