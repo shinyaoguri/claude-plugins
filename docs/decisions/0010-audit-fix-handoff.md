@@ -1,6 +1,6 @@
 # 0010: 監査と修正はスキルを分け、findings artifact を受け渡しの正本にする
 
-- **状態**: 採用 (2026-08-05, Issue [#50](https://github.com/shinyaoguri/claude-plugins/issues/50) の判断)
+- **状態**: 採用 (2026-08-05, Issue [#50](https://github.com/shinyaoguri/claude-plugins/issues/50) の判断。決定 5 は 2026-08-09 に PR [#60](https://github.com/shinyaoguri/claude-plugins/pull/60) / [#73](https://github.com/shinyaoguri/claude-plugins/pull/73) の判断を追記録)
 - **文脈**: repo-audit スキルは手順 4・5 に修正フロー (群ごとの承認 → 適用 → 再監査) を持っていたが、実行すると報告で終わりやすい。原因は指示の不足ではなく構造にある:
 
   - **完了感が中間で立つ**。レポート提示が視覚的なゴールになり、49 項目の表を出した時点でタスク完了として扱われる
@@ -15,7 +15,12 @@
   2. findings の読み書きは `rs-findings.sh` のサブコマンド (`save` / `list` / `set` / `summary`) に限り、**LLM に JSON を手で編集させない**。値の綴り・引き継ぎ規則・集計はスクリプト側で決定論的に守る
   3. 前回の判断 (`decision`) と LLM 判定 (`verdict`) は id 単位で引き継ぐが、**status が変わった項目だけ pending に戻す**。承認が積み上がって蒸し返しが消え、かつ現状と食い違った承認は残らない。LLM 判定は付けたときの HEAD を持ち、HEAD が進めば再判定の対象に戻る
   4. スキルを **repo-audit** (機械判定 → LLM 判定 → 保存 → レポート) と **repo-audit-fix** (承認 → 適用 → 再監査) に分ける。分割の根拠は責務分離ではなく「**別々に起動される実ユースケースがある**」こと — 前回保留した項目を今日直す / 監査だけしたい (他人のリポ、read-only 権限)。[0009](0009-plugin-granularity.md) はプラグイン粒度の基準であり、スキル分割はこの基準で判断する
-  5. 修正の群は「**リスク × 自動化可否**」で切る。決定論的 fix はまとめて 1 承認・1 コミット、生成的 fix は 1 件ずつ承認・1 件 1 コミット、破壊的 fix は提示のみ。項目の性質は正本が `fix_kind` で宣言でき、スクリプトは値を検証せず素通しする (妥当性は正本側のテストが守る。[0006](0006-repo-standards-source-of-truth.md) と同じ契約)
+  5. 修正の群は「**リスク × 自動化可否**」で切る。**群が決めるのは適用の仕方 (コミット粒度・そもそも当てるか) であって、承認の回数ではない** — 承認は群をまたいだ一覧に対して 1 回だけ取る。決定論的 fix はまとめて適用して**コミットは type ごとに分け** (構成ファイルは chore、CI は ci、ドキュメントは docs)、生成的 fix は 1 件 1 コミット、破壊的 fix は提示のみ。項目の性質は正本が `fix_kind` で宣言でき、スクリプトは値を検証せず素通しする (妥当性は正本側のテストが守る。[0006](0006-repo-standards-source-of-truth.md) と同じ契約)
+
+     この決定は当初「決定論的 fix はまとめて **1 承認・1 コミット**、生成的 fix は 1 件ずつ承認」としていたものを、運用してから 2 度改めている:
+
+     - **コミットは type ごとに分ける** (PR [#60](https://github.com/shinyaoguri/claude-plugins/pull/60)) — 決定論的 fix をすべて 1 コミットに押し込むと、構成ファイル・CI・ドキュメントの変更が混ざって何をなぜ変えたのかが追えず、revert もできない
+     - **承認は一覧に対して 1 回** (PR [#73](https://github.com/shinyaoguri/claude-plugins/pull/73)) — 適用結果は 1 PR に載り、squash merge 前にレビューでき、マージ後も revert できる。可逆な変更に項目ごとの承認を重ねても安全性は上がらず、同じ内容を PR で二度見ることになるだけ。ここで残す確認は内容の精査ではなく、適用する / 直さない / 見送るの**仕分け**に絞る
   6. 報告で止めない仕掛けは**文言でなく出力に埋める**。`rs-findings.sh summary` の `_next` 行が集計と次アクションを返し、レポートに必ず現れる。Stop hook による強制は採らない (プラグインの hook は全セッションに効くため過剰)
 
 - **影響**: repo-standards のスキルは 6 個になる (0009 の再議論しきい値は 8)。findings はマシンローカルで揮発し他マシンへ伝搬しないため、**持ち越し (`deferred`) を対象リポの Issue へ移す運用とセットで初めて記憶リセット耐性を満たす**。`fix_kind` を実際に持たせるのは setup リポ (`claude/repo-standards.json`) 側の別 PR で、それまで repo-audit-fix は fix の文面から群を推定する。定期実行によるドリフト検知 ([#22](https://github.com/shinyaoguri/claude-plugins/issues/22)) を入れる場合、是正への導線がこの分割で用意できているため通知が滞留しない。
