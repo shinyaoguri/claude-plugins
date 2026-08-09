@@ -114,6 +114,37 @@ builtin_test_dir_exists() {
   echo fail
 }
 
+# 代表的なテスト実行コマンドの語彙。言語が増えたらここも育てる
+# (bash はテストランナーでなくスクリプトの直接実行 ./scripts/test-*.sh が慣習)
+TEST_CMD_RE='(swift test|npm (run )?test|pnpm (run )?test|yarn test|pytest|unittest|go test|cargo test|bun test|vitest|jest|(^|[ /])(test[-_][^ ]*|[^ /]*_test)\.(sh|bash)|(^| )bats )'
+
+# workflow の run: が呼ぶ npm/pnpm/yarn script を package.json で展開した本文を返す。
+# CI とローカルで同一の集約コマンド (npm run check が lint と test をまとめて呼ぶ形)
+# を使い、チェック列の正本を package.json に置く構成は珍しくないため、YAML の文字列
+# 検索だけでは追えない。集約の集約まで届くよう 2 段たどる
+expand_ci_npm_scripts() {
+  [ -f package.json ] || return 0
+  local files names seen="" body="" round name val next
+  files=$(workflow_files)
+  [ -n "$files" ] || return 0
+  names=$(grep -hoE '(npm|pnpm|yarn)( +run)? +[A-Za-z0-9:@._-]+' $files | awk '{print $NF}' | sort -u)
+  for round in 1 2; do
+    next=""
+    for name in $names; do
+      case " $seen " in *" $name "*) continue ;; esac
+      seen="$seen $name"
+      val=$(jq -r --arg n "$name" '.scripts[$n] // empty' package.json 2>/dev/null) || continue
+      [ -n "$val" ] || continue
+      body="$body
+$val"
+      next="$next $(grep -oE '(npm|pnpm|yarn)( +run)? +[A-Za-z0-9:@._-]+' <<<"$val" | awk '{print $NF}')"
+    done
+    names=$next
+    [ -n "$names" ] || break
+  done
+  printf '%s\n' "$body"
+}
+
 # テストディレクトリがあっても CI で呼ばれていなければ「置いてあるだけ」になる
 # (setup リポ issue #36 の実例: 手元でしか流さず 1 件赤いまま数日放置された)
 builtin_tests_run_in_ci() {
@@ -121,13 +152,23 @@ builtin_tests_run_in_ci() {
   local files
   files=$(workflow_files)
   [ -n "$files" ] || { echo "skip:CI workflow が無いため対象外"; return; }
-  # 代表的なテスト実行コマンド。言語が増えたらここも育てる
-  # (bash はテストランナーでなくスクリプトの直接実行 ./scripts/test-*.sh が慣習)
-  if grep -qhE '(swift test|npm (run )?test|pnpm (run )?test|yarn test|pytest|unittest|go test|cargo test|bun test|vitest|jest|(^|[ /])(test[-_][^ ]*|[^ /]*_test)\.(sh|bash)|(^| )bats )' $files; then
+  if grep -qhE "$TEST_CMD_RE" $files; then
     echo ok
-  else
-    echo fail
+    return
   fi
+  local expanded
+  expanded=$(expand_ci_npm_scripts)
+  if [ -n "$expanded" ] && grep -qE "$TEST_CMD_RE" <<<"$expanded"; then
+    echo "ok:package.json の集約 script 経由でテストが走っている"
+    return
+  fi
+  # package.json があるのに見つからないときは、さらに深い集約や外部ツール経由の
+  # 可能性が残る。「テストが無い」と断定せず、確認先を添えて返す
+  if [ -f package.json ]; then
+    echo "fail:CI にテスト実行コマンドが見当たらない (package.json の script を 2 段たどっても見つからない。さらに深い集約なら実 run のログで確認する)"
+    return
+  fi
+  echo fail
 }
 
 builtin_pr_title_lint_configured() {
@@ -247,6 +288,8 @@ while IFS= read -r item; do
       result=$("builtin_$name")
       case "$result" in
         ok) emit "$id" "$layer" "$level" ok "" ;;
+        # ok:<詳細> は適合と判定した根拠が自明でない場合 (どう回り道して見つけたか)
+        ok:*) emit "$id" "$layer" "$level" ok "${result#ok:}" ;;
         skip:*) emit "$id" "$layer" "$level" skip "${result#skip:}" ;;
         # fail:<詳細> は検査が具体的な違反箇所を掴んでいる場合 (どのブランチ・どのファイルか)
         fail:*) emit "$id" "$layer" "$level" "$(fail_status "$level")" "${result#fail:} — $why" "$fix" "$fix_kind" ;;
