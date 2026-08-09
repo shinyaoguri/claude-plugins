@@ -162,6 +162,51 @@ assert warn "テストはあるが CI で実行していない" \
            printf "jobs:\n  t:\n    steps:\n      - run: echo build\n" > .github/workflows/ci.yml &&
            git add -A'
 
+# 正常系: 集約 npm script 経由 (CI は npm run check だけを呼び、実体は package.json)
+assert ok "集約 npm script を package.json までたどる" \
+  bash -c 'mkdir -p scripts .github/workflows && touch scripts/test-foo.sh &&
+           printf "jobs:\n  t:\n    steps:\n      - run: npm ci\n      - run: npm run check\n" > .github/workflows/ci.yml &&
+           printf "{\"scripts\":{\"check\":\"npm run lint && npm test\",\"test\":\"vitest run\"}}\n" > package.json &&
+           git add -A'
+
+# 正常系: 集約の集約 (2 段) までは届く
+assert ok "集約 script の 2 段目でも見つける" \
+  bash -c 'mkdir -p scripts .github/workflows && touch scripts/test-foo.sh &&
+           printf "jobs:\n  t:\n    steps:\n      - run: npm run ci\n" > .github/workflows/ci.yml &&
+           printf "{\"scripts\":{\"ci\":\"npm run check\",\"check\":\"npm run lint && npm test\"}}\n" > package.json &&
+           git add -A'
+
+# 境界値: 3 段以上の入れ子は追わない (無制限に展開せず、確認先を添えた warn に落とす)
+assert warn "3 段の入れ子は追わない" \
+  bash -c 'mkdir -p scripts .github/workflows && touch scripts/test-foo.sh &&
+           printf "jobs:\n  t:\n    steps:\n      - run: npm run a\n" > .github/workflows/ci.yml &&
+           printf "{\"scripts\":{\"a\":\"npm run b\",\"b\":\"npm run c\",\"c\":\"vitest run\"}}\n" > package.json &&
+           git add -A'
+
+# 失敗系: package.json はあるが、呼ばれている script にテストが無い
+assert warn "呼ばれている script にテストが無い" \
+  bash -c 'mkdir -p scripts .github/workflows && touch scripts/test-foo.sh &&
+           printf "jobs:\n  t:\n    steps:\n      - run: npm run build\n" > .github/workflows/ci.yml &&
+           printf "{\"scripts\":{\"build\":\"tsc -p .\"}}\n" > package.json &&
+           git add -A'
+
+# 集約経由で ok にした項目は、どう見つけたかを detail に残す (ok:<詳細> の出力契約)
+agg_dir="$tmp/aggregate-detail"
+mkdir -p "$agg_dir"
+( cd "$agg_dir" && git init -q -b main &&
+  mkdir -p scripts .github/workflows && touch scripts/test-foo.sh &&
+  printf "jobs:\n  t:\n    steps:\n      - run: npm run check\n" > .github/workflows/ci.yml &&
+  printf '{"scripts":{"check":"npm test"}}\n' > package.json &&
+  git add -A ) >/dev/null 2>&1
+got=$( cd "$agg_dir" && REPO_STANDARDS_JSON="$manifest" bash "$target" \
+  | jq -r 'select(.id == "tests-run-in-ci") | .detail // ""' )
+if [ -n "$got" ]; then
+  echo "  [ok]   集約経由の ok は根拠を detail に残す → $got"
+else
+  echo "  [FAIL] 集約経由の ok の detail → 期待 非空 / 実際 空"
+  failures=$((failures + 1))
+fi
+
 echo
 echo "builtin_no_committed_secrets (除外パターンの境界):"
 check_id=no-committed-secrets
