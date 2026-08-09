@@ -1,15 +1,17 @@
 ---
 name: repo-audit-fix
-description: "repo-audit が保存した findings をもとに、個人標準に適合していない項目を承認を取りながら修正する。リポ内ファイルの修正は 1 PR にまとめ、GitHub 設定は定義ファイル経由、破壊的操作は提示のみ。適用後に再監査して before / after を示す。Use when fixing repository standard violations, applying repo-audit findings, or resuming an unfinished standards fix."
+description: "repo-audit が保存した findings をもとに、個人標準に適合していない項目を修正する。適用可否の承認は一覧で 1 回だけ取り、リポ内ファイルの修正は 1 PR にまとめる。GitHub 設定は定義ファイル経由、破壊的操作と設計意図に反する項目は提示のみ。適用後に再監査して before / after を示す。Use when fixing repository standard violations, applying repo-audit findings, or resuming an unfinished standards fix."
+allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-repo.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-github.sh:*)"
 ---
 
 repo-audit が保存した findings を入力に、承認された項目だけを適用する。findings があれば監査をやり直さずに再開できる。
 
+同梱スクリプトは**下記のとおり `${CLAUDE_PLUGIN_ROOT}/scripts/...` を毎回そのまま書く**。`P=` のような変数に束ねるとコマンド文字列が frontmatter の allowed-tools と一致せず、1 コマンドごとに許可を聞かれる。
+
 ## 前提の確認
 
 ```bash
-P="${CLAUDE_PLUGIN_ROOT}/scripts"
-bash "$P/rs-findings.sh" summary
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh summary
 ```
 
 - `findings が空` → 先に repo-audit スキルで監査する
@@ -18,17 +20,23 @@ bash "$P/rs-findings.sh" summary
 - `衝突判定待ち N 件` → repo-audit の手順 4 (衝突判定) を先に済ませることを勧める。通さずに進むと、このリポでは意図的にそうしている項目まで標準に合わせて直すことになる
 - worktree が dirty → 退避を促して中断する (適用は新しいブランチに載せるため)
 
+## 承認の粒度
+
+**チャットで承認を取るのは一覧に対して 1 回だけ**にする。目的は内容の精査ではなく、**適用する / 直さない (rejected) / 今回は見送る (deferred) の仕分け**を確定させること。内容の精査は PR レビューに一元化する — 適用結果は 1 PR に載り、squash merge 前にレビューでき、マージ後も revert できる。項目ごとに文面を承認させると、同じ内容を PR で二度見ることになるだけで、可逆な変更に確認の往復を増やしても安全性は上がらない。
+
+例外は**適用せず提示だけする項目** (下表の「提示のみ」) で、これは承認の対象ではなく、実行するかどうかをユーザー自身が決める。
+
 ## 手順
 
-1. 未決項目を取る: `bash "$P/rs-findings.sh" list --decision pending`
+1. 未決項目を取る: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh list --decision pending`
 
-2. fix の性質で群に分ける。承認の粒度が群ごとに違う:
+2. fix の性質で群に分ける。**群は適用の仕方 (コミット粒度・そもそも当てるか) を決めるもので、承認回数を分けるものではない**:
 
-   | 群 | 対象 | 進め方 |
+   | 群 | 対象 | 適用の仕方 |
    |---|---|---|
-   | 1. 決定論的 | 内容が一意に決まるもの (設定ファイル・ワークフロー・テンプレートの配置) | まとめて 1 回承認し、コミットは type ごとに分ける |
-   | 2. 生成的 | リポ固有の中身を書き起こすもの (README・CLAUDE.md・ADR・CONTRIBUTING) | 1 件ずつ内容を提示して承認し、1 件 1 コミット |
-   | 3. 破壊的 | 削除・履歴の書き換え・ブランチ整理・追跡済み秘密ファイルの除去 | コマンドを提示するだけ。実行はユーザーに委ねる |
+   | 1. 決定論的 | 内容が一意に決まるもの (設定ファイル・ワークフロー・テンプレートの配置) | まとめて適用し、コミットは type ごとに分ける |
+   | 2. 生成的 | リポ固有の中身を書き起こすもの (README・CLAUDE.md・ADR・CONTRIBUTING) | 1 件 1 コミットで適用する (内容は PR の diff でレビューする) |
+   | 3. 提示のみ | 削除・履歴の書き換え・ブランチ整理・追跡済み秘密ファイルの除去 | コマンドを提示するだけ。実行はユーザーに委ねる |
 
    項目に `fix_kind` があればそれに従い、無ければ fix の文面から上表で分類する。
 
@@ -37,20 +45,20 @@ bash "$P/rs-findings.sh" summary
    | `intent` | 扱い |
    |---|---|
    | `conflicts` | **群 3 (提示のみ)** に落とす。`intent_note` の理由をそのまま添えて「標準はこう言うが、このリポはこう決めている」と提示し、適用するかはユーザーに委ねる。勝手に当てない |
-   | `unclear` | 元の群のまま。ただし**承認を取るときに `intent_note` を必ず併せて提示する** — 判断材料を伏せたまま承認させない |
+   | `unclear` | 元の群のまま。ただし**一覧に `intent_note` を必ず併記する** — 判断材料を伏せたまま承認させない |
    | `aligned` / 未判定 | 元の群のまま |
 
    `conflicts` の項目をユーザーが「やはり直さない」と決めたら `rejected` に、標準の側を見直すべきだと判断したら**その理由を setup リポ (`claude/repo-standards.json`) の Issue へ持っていく** — 個別リポの逸脱が積み重なるなら、直すべきは標準の方かもしれない
 
    GitHub 設定 (`layer: github`) の扱い:
-   - `.github/repo-settings.json` があるリポでは**群 1 に含める** — gh コマンドで直接変えず、定義ファイルの変更として PR に載せ、マージ後にそのリポの手順で適用する (承認が PR に一元化され、変更の根拠が diff に残る)
+   - `.github/repo-settings.json` があるリポでは**群 1 に含める** — gh コマンドで直接変えず、定義ファイルの変更として PR に載せ、マージ後にそのリポの手順で適用する (変更の根拠が diff に残る)
    - 定義ファイルが無いリポでのみ、各項目の `fix` の gh コマンドを全文提示し、承認後に実行する
 
-3. 群ごとに番号付きで提示し、適用可否の承認を取る。承認されなかった項目も findings に記録してから次へ進む (記録しないと次のセッションで同じ確認を繰り返す):
+3. 群ごとに番号付きで並べた**一覧を 1 回提示し、まとめて承認を取る**。生成的な項目は「何を書き起こすか」を 1 行で添える (全文は出さない — 読むのは PR の diff で足りる)。承認されなかった項目も findings に記録してから次へ進む (記録しないと次のセッションで同じ確認を繰り返す):
 
    ```bash
-   bash "$P/rs-findings.sh" set --decision rejected --note "<理由>" <id>...   # 直さないと決めた
-   bash "$P/rs-findings.sh" set --decision deferred --note "<理由>" <id>...   # 今回は見送り
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh set --decision rejected --note "<理由>" <id>...   # 直さないと決めた
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh set --decision deferred --note "<理由>" <id>...   # 今回は見送り
    ```
 
 4. 承認された項目を適用する。`chore/repo-standards` ブランチを切り、群 1・2 をまとめて **1 PR** にする (標準適合が 1 関心事なので、項目ごとに PR は作らない)。
@@ -69,7 +77,7 @@ bash "$P/rs-findings.sh" summary
    適用したら記録する:
 
    ```bash
-   bash "$P/rs-findings.sh" set --decision applied <id>...
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh set --decision applied <id>...
    ```
 
    生成的 fix が多く 1 PR の粒度を超えるときは、関心ごとに PR を分けて残りを `deferred` にする
@@ -77,7 +85,7 @@ bash "$P/rs-findings.sh" summary
 5. 再監査して before / after を表で提示する:
 
    ```bash
-   { bash "$P/rs-audit-repo.sh"; bash "$P/rs-audit-github.sh"; } | bash "$P/rs-findings.sh" save
+   { bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-repo.sh; bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-github.sh; } | bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh save
    ```
 
    直った項目は status が変わり decision が自動で消える。`applied_unresolved` が残っていたら適用が効いていないので、その項目の fix を見直す。GitHub 設定を定義ファイル経由で直した項目は PR マージ + 適用の後でないと解消しないので、その旨を添えて残す

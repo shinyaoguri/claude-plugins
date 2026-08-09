@@ -1,16 +1,17 @@
 ---
 name: env-doctor
 description: "マシン側の Claude グローバル環境を診断する (~/.claude の symlink ドリフト・setup リポの鮮度・スキル二重供給・settings.json の破損・役目を終えたローカルブランチを掃除する git 設定)。Use when diagnosing the global Claude environment, when ~/.claude symlinks or settings look wrong, when merged local branches pile up, or after setting up a new machine."
+allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh:*), Bash(git gone)"
 ---
 
 マシン全体の診断なので cwd は問わない。修正の適用は必ず下の順序で行う (順序を飛ばすと直したそばから ansible に上書きされる)。
 
 ## 手順
 
-1. 診断を実行する (JSON Lines、常に exit 0。正本 repo-standards.json が無くても動く):
+1. 診断を実行する (JSON Lines、常に exit 0。正本 repo-standards.json が無くても動く)。**コマンドは下記のとおり `${CLAUDE_PLUGIN_ROOT}/scripts/...` をそのまま書く** (変数に束ねると frontmatter の allowed-tools と一致せず許可を聞かれる):
 
    ```bash
-   bash "${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh"
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh
    ```
 
 2. 各項目を `[ok]` / `[warn]` / `[ng]` の一覧で提示し、問題には fix を添える
@@ -28,5 +29,6 @@ description: "マシン側の Claude グローバル環境を診断する (~/.cl
 - スキル置き場のルール (汎用 / リポ固有 / 第三者配布の切り分け): setup リポの claude/CLAUDE.md (グローバル CLAUDE.md) のスキル節
 - git のグローバル設定 (fetch.prune・gone / gone-clean エイリアスの実体): setup リポの tasks/git.yml
 - 検査項目の実装: `${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh` (すべてビルトイン。正本 JSON に依存しない)
+- 削除系 (`git gone-clean`・実体コピーの `rm`) を allowed-tools に載せていないのは意図的。提示のみに留める方針を許可の側でも担保する
 
 このスキル自体の不具合・使いにくさに気付いたら、report-issue スキルで shinyaoguri/claude-plugins へ気軽に起票する。

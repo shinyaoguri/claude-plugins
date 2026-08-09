@@ -42,6 +42,8 @@
 #     残ると、repo-audit-fix が承認の要らない項目まで並べることになる
 #   - **verdict を書き換えると verified は落ちる**。反証済みの判定が、再判定後も
 #     反証済みに見えるのを防ぐ
+#   - **未知の id を含む set は非 0 で拒否し、1 件も書き込まない**。警告だけで成功を
+#     返すと、typo した書き戻しが成功したように見えて未決のまま取り残される
 set -uo pipefail
 . "$(dirname "$0")/rs-lib.sh"
 
@@ -232,11 +234,19 @@ cmd_set() {
     fi
   fi
 
-  # 存在しない id は黙って捨てず報告する (typo だと承認したつもりの項目が未決のまま残る)
+  # 存在しない id は非 0 で拒否する。警告だけ出して成功を返すと、typo した書き戻しが
+  # 成功したように見え、判定を付けたつもりの項目が未決のまま次のセッションへ渡る。
+  # 1 件でも未知なら既知の id も含めて書き込まない (一部だけ通った状態を作らない)
+  unknown=""
   for id in $ids; do
     jq -e --arg id "$id" 'select(.id == $id)' "$file" >/dev/null 2>&1 \
-      || echo "rs-findings: 未知の id: $id" >&2
+      || unknown="$unknown $id"
   done
+  if [ -n "$unknown" ]; then
+    echo "rs-findings: 未知の id:$unknown" >&2
+    echo "  rs-findings.sh list で id を確認する (1 件でも未知なら何も書き込まない)" >&2
+    exit 2
+  fi
 
   local idsjson
   idsjson=$(printf '%s\n' $ids | jq -R . | jq -sc .)
