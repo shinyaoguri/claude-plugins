@@ -213,6 +213,37 @@ builtin_no_committed_secrets() {
   echo "fail:追跡中の秘密ファイル候補: $(tr '\n' ' ' <<<"$hits")"
 }
 
+# 掴んでいるブランチが消えていて、失って困るものを持たない worktree を挙げる。
+# 「消して良いか」の判定に祖先関係 (ahead N) を使わないのが要点 — squash merge では
+# マージ済みでも元コミットが main の祖先にならず ahead に出続けるため、素直に読むと
+# 消せるものを残す。upstream:track が [gone] なら PR がマージされて head ブランチが
+# 削除された後なので、内容は remote 側に入っている
+removable_worktrees() { # → basename を 1 行ずつ
+  local path branch track main_wt
+  # リポジトリ本体と、監査を実行している自分自身は候補から外す
+  main_wt=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')
+  while IFS=$'\t' read -r path branch; do
+    [ -n "$path" ] || continue
+    case "$path" in "$main_wt" | "$root") continue ;; esac
+    # 未コミットの変更があるものは触らない
+    [ -z "$(git -C "$path" status --porcelain 2>/dev/null)" ] || continue
+    # 再生成できない ignored ファイル (.env 等の設定) は通常の status に出ない。
+    # .build や node_modules と違って消すと失われるので、持つものは候補から外す
+    git -C "$path" status --porcelain --ignored 2>/dev/null \
+      | grep -qE '^!! (.*/)?\.env' && continue
+    # detached HEAD は追跡ブランチが無く自動判定できない (PR の head と突き合わせる
+    # 手作業が要る) ので候補にしない
+    [ -n "$branch" ] || continue
+    track=$(git for-each-ref --format='%(upstream:track)' "refs/heads/$branch" 2>/dev/null)
+    [ "$track" = "[gone]" ] || continue
+    basename "$path"
+  done < <(git worktree list --porcelain 2>/dev/null | awk '
+    /^worktree /{p=$2; b=""}
+    /^branch /{sub(/^refs\/heads\//, "", $2); b=$2}
+    /^$/{if (p != "") print p"\t"b; p=""}
+    END{if (p != "") print p"\t"b}')
+}
+
 # 使い終わった worktree の残骸。~/.claude/ の symlink が worktree を指す事故の温床でもある
 builtin_worktrees_clean() {
   [ -d .claude/worktrees ] || { echo ok; return; }
@@ -229,7 +260,15 @@ builtin_worktrees_clean() {
   if [ -n "$orphan" ]; then
     echo "fail:git に登録されていない worktree ディレクトリ:$orphan"
   elif [ "$n" -gt 3 ]; then
-    echo "fail:worktree が $((n - 1)) 個ある (使い終わったものは git worktree remove で掃除する)"
+    # 個数だけでは緊急度が伝わらない (1 リポで 9 GB 超えた実例がある) ので容量を添える
+    local mb removable
+    mb=$(du -sk .claude/worktrees 2>/dev/null | awk '{printf "%d", $1 / 1024}')
+    removable=$(removable_worktrees | tr '\n' ' ')
+    if [ -n "${removable// /}" ]; then
+      echo "fail:worktree が $((n - 1)) 個 / ${mb} MB ある。upstream が [gone] で未コミットの変更も無い候補: ${removable% }"
+    else
+      echo "fail:worktree が $((n - 1)) 個 / ${mb} MB ある (自動で安全と判定できる候補は無い。squash merge では ahead N が未マージを意味しないので、PR のマージ状況で確認する)"
+    fi
   else
     echo ok
   fi

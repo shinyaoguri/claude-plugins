@@ -40,6 +40,11 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh summary
 
    項目に `fix_kind` があればそれに従い、無ければ fix の文面から上表で分類する。
 
+   **worktree の掃除 (`claude-worktrees-clean`)** — 監査の detail が挙げた候補 (upstream が `[gone]` で未コミットの変更が無いもの) だけを `git worktree remove` の対象として提示する。候補に挙がらなかったものは自分で判断せず、次を添えてユーザーへ渡す:
+
+   - **`ahead N` を未マージ作業の根拠にしない**。squash merge では元コミットが main の祖先にならないため、マージ済みでも ahead に出続ける。逆に取り込むと古い内容で main を上書きしうる。判断材料は `gh pr list --head <branch> --state all` のマージ済み PR か、対象ファイルの実体比較 (`git diff origin/main:<file> <branch>:<file>`)
+   - submodule を含む worktree は `git worktree remove` が拒否し、`rm -rf` するしかない。**不可逆なので群 3 (提示のみ) から動かさない**
+
    **`intent` による群の上書き** — この標準は全リポ共通のルールで、個別のリポで最適とは限らない。監査が意図との衝突を記録している項目は群を落とす:
 
    | `intent` | 扱い |
