@@ -123,8 +123,15 @@ check "2" "$got" "decision の綴り違いは非 0 で拒否する"
 
 d=$(newrepo)
 got=$( cd "$d" && line a warn | bash "$target" save >/dev/null
-       bash "$target" set --decision approved typo-id 2>&1 >/dev/null | grep -c '未知の id' )
-check "1" "$got" "未知の id は警告する"
+       bash "$target" set --decision approved typo-id >/dev/null 2>&1; echo $? )
+check "2" "$got" "未知の id は非 0 で拒否する"
+
+# 一部だけ通ると、typo に気付いた時点で何が書き込まれたのか分からなくなる
+d=$(newrepo)
+got=$( cd "$d" && line a warn | bash "$target" save >/dev/null
+       bash "$target" set --decision approved a typo-id >/dev/null 2>&1
+       bash "$target" list | jq -r .decision )
+check "pending" "$got" "未知の id が混ざったら既知の id にも書き込まない"
 
 d=$(newrepo)
 got=$( cd "$d" && line a warn | bash "$target" save >/dev/null
