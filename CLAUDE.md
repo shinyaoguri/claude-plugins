@@ -15,7 +15,8 @@
 - SKILL.md の frontmatter description は必ずクォートする (裸の `: ` が混ざると YAML パースが落ち、メタデータ全体が無視される)
 - CI と同じチェックはローカルで `scripts/check-consistency.sh` / `scripts/check-deprecated-patterns.sh` / `scripts/check-version-bump.sh` / `scripts/check-upstream-refs.sh --coverage` として実行できる。これらと `scripts/test-*.sh`・`claude plugin validate`・gh の参照系は [.claude/settings.json](.claude/settings.json) で事前許可してあり確認プロンプトが出ない。**破壊的・外部影響のあるコマンド (`git push` / `gh pr merge` / `gh issue create` / `apply-repo-settings.sh --apply` 等) は allow に入れない**
 - GitHub のリポジトリ設定は [.github/repo-settings.json](.github/repo-settings.json) が正本。**設定は GitHub の画面や gh コマンドで直接変えず、この JSON を変える PR として出す** (ADR [0008](docs/decisions/0008-repo-settings-as-code.md))。適用は `scripts/apply-repo-settings.sh --apply`、差分検査は引数なし。**admin 権限のあるトークンで実行する** (CI の GITHUB_TOKEN では管理系フィールドが読めないため CI では回さない)
-- プラグイン同梱スクリプトの判定ロジックは `scripts/test-rs-*.sh` (対象スクリプトごとに 1 本) でテストする。一時 git リポと最小 manifest を組み立て、出力 (JSON Lines) の status を検証するエンドツーエンド方式 (正本との出力契約ごと守るため、関数を source しない)
+- プラグイン同梱スクリプトの判定ロジックは `scripts/test-rs-*.sh` (対象スクリプトごとに 1 本) でテストする。一時 git リポと最小 manifest を組み立て、出力 (JSON Lines) の status を検証するエンドツーエンド方式 (正本との出力契約ごと守るため、関数を source しない)。同梱フック (`hooks/scripts/`) も同じ流儀で、検証対象は Claude Code との契約である**終了コードと stderr** になる (`gh` はスタブに差し替え、GitHub にも Claude セッションにも触らない)
+- エージェントの振る舞いを縛るフックは各リポにコミットせず、`repo-standards` プラグインが `hooks/hooks.json` で供給する (ADR [0016](docs/decisions/0016-agent-behavior-hooks-in-plugin.md))。個人標準 (`repo-standards.json`) には項目を足さない
 - `scripts/check-guardrail-weakening.sh` (テスト: `scripts/test-guardrail-weakening.sh`) だけは**ゲートでなくレポート**で、検出しても exit 0 を保つ。守りを緩める変更は正当な場合があるので止めず、ラベルとコメントで可視化する (ADR [0007](docs/decisions/0007-guardrail-visibility.md))
 
 ## バージョン規約 (ADR [0003](docs/decisions/0003-version-policy.md))
