@@ -160,6 +160,60 @@ bytes=$(wc -c <<<"$out" | tr -d ' ')
   || fail "出力が肥大している → ${bytes} バイト"
 
 echo
+echo "--save (修正フローへの引き渡し口):"
+
+findings="$repo_root/plugins/repo-standards/scripts/rs-findings.sh"
+
+# 保存の有無で汚れるので、これ以降は専用のリポを使う
+sdir="$tmp/saverepo"
+mkdir -p "$sdir"
+( cd "$sdir" && git init -q -b main && echo "# r" > README.md && git add -A \
+  && git commit -q -m init ) || { echo "セットアップ失敗"; exit 1; }
+srun() { ( cd "$sdir" && REPO_STANDARDS_JSON="$manifest" bash "$target" "$@" ); }
+sfindings=$( cd "$sdir" && bash "$findings" path )
+
+srun --no-github >/dev/null
+[ -f "$sfindings" ] && fail "--save 無しで findings を保存している (既定は triage 専用)" \
+  || ok "既定では findings を保存しない"
+
+sout=$(srun --no-github --save)
+if [ -f "$sfindings" ]; then
+  ok "--save で findings を保存する"
+else
+  fail "--save でも findings が無い"
+fi
+
+# 未判定の manual も未決に入る (「まだ決められない」ので判断を保留する既定の挙動)。
+# min の手順では判定を --source min で書き戻すため、ここは書き戻し前の状態
+got=$( cd "$sdir" && bash "$findings" list --decision pending | jq -r .id | sort | tr '\n' ' ' )
+[ "$got" = "manual-item ng-item warn-item " ] \
+  && ok "逸脱した項目が未決として修正フローへ渡る → $got" \
+  || fail "未決の項目 → 期待 [manual-item ng-item warn-item ] / 実際 [$got]"
+
+# manual 項目も保存されること (判定は書き戻しで後から付く)
+got=$( cd "$sdir" && bash "$findings" list --needs-verdict | jq -r .id | tr '\n' ' ' )
+[ "$got" = "manual-item " ] && ok "manual 項目は未判定のまま保存される → $got" \
+  || fail "manual 項目 → 期待 [manual-item ] / 実際 [$got]"
+
+grep -q '次: findings に保存済み' <<<"$sout" && ok "保存したことを次アクションに出す" \
+  || fail "保存したことが次アクションに無い: $sout"
+
+# 保存しても出力は圧縮テキストのまま。ここが緩むと簡易監査である意味が消える
+slines=$(wc -l <<<"$sout" | tr -d ' ')
+sbytes=$(wc -c <<<"$sout" | tr -d ' ')
+[ "$slines" -eq 5 ] && ok "--save でも 5 行のまま" || fail "--save で行数が増えた → $slines 行"
+[ "$sbytes" -lt 700 ] && ok "--save でも ${sbytes} バイト (< 700)" \
+  || fail "--save で出力が肥大している → ${sbytes} バイト"
+
+# git リポ外では保存先が無い。黙って成功したことにせず、保存できないと伝える
+o=$( cd "$outside" && REPO_STANDARDS_JSON="$manifest" bash "$target" --no-github --save ); c=$?
+if [ "$c" -eq 0 ] && grep -q 'findings に保存できない' <<<"$o"; then
+  ok "git リポ外の --save → 保存できないと伝えて exit 0"
+else
+  fail "git リポ外の --save → exit=$c / 出力: $o"
+fi
+
+echo
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures 件"
   exit 1
