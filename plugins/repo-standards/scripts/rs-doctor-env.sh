@@ -135,14 +135,68 @@ fi
 [ "$found_any" -eq 0 ] && emit env-skills-clean env required ok "~/.claude/skills に残骸なし"
 
 # ---- 5. settings.json が壊れていないか ----
+settings_valid=0
 if jq empty "$claude_dir/settings.json" 2>/dev/null; then
+  settings_valid=1
   emit env-settings-valid env required ok "settings.json は正しい JSON"
 else
   emit env-settings-valid env required ng "~/.claude/settings.json が JSON として壊れている (設定全体が無視される)" \
     "jq empty ~/.claude/settings.json でエラー箇所を特定して修正する"
 fi
 
-# ---- 6. gh トークンが管理権限を持っていないか ----
+# ---- 6. settings.json が参照するフックスクリプトが実在し実行できるか ----
+# 登録されているのに実体が無い状態は無音で通る (Claude Code は黙って先へ進む) ため、
+# 「ガードがある前提で作業しているのにガードが無い」という一番まずい形になる。
+# フックは今後も増えるので個別項目でなく走査で持つ (経緯: claude-plugins#82)。
+# 対象は ~/.claude 配下を指すコマンドのみ。setup が配布する実体を参照するものだけが
+# symlink 供給の欠落で無音化しうる (PATH 上のコマンドは対象外)
+hook_fix="setup リポの tasks/claude.yml (claude_config_files) に対象が入っているか確認し、ansible-playbook playbook_sillicon_mac.yml --tags claude を実行する"
+if [ "$settings_valid" -eq 1 ]; then
+  hook_cmds=$(jq -r '(.hooks // {}) | to_entries[] | .value[]? | (.hooks // [])[]?
+    | select(.type == "command") | .command // empty' "$claude_dir/settings.json" 2>/dev/null)
+  hook_total=0
+  hook_bad=0
+  while IFS= read -r cmd; do
+    [ -n "$cmd" ] || continue
+    # 引数付きでも判定できるよう先頭トークンだけ見る
+    bin=${cmd%% *}
+    case "$bin" in
+      '~/.claude/'*) path="$claude_dir/${bin#\~/.claude/}" ;;
+      '$HOME/.claude/'*) path="$claude_dir/${bin#\$HOME/.claude/}" ;;
+      "$claude_dir/"*) path="$bin" ;;
+      *) continue ;;
+    esac
+    hook_total=$((hook_total + 1))
+    name=$(basename "$path")
+    if [ ! -e "$path" ]; then
+      hook_bad=$((hook_bad + 1))
+      if [ -L "$path" ]; then
+        emit "env-hook-missing-$name" env required ng \
+          "settings.json が参照するフック $name の symlink が切れている ($(readlink "$path")) — このフックは無音で効かない" \
+          "$hook_fix"
+      else
+        emit "env-hook-missing-$name" env required ng \
+          "settings.json が参照するフック ~/.claude/$name が存在しない — このフックは無音で効かない" \
+          "$hook_fix"
+      fi
+    elif [ ! -x "$path" ]; then
+      hook_bad=$((hook_bad + 1))
+      emit "env-hook-not-executable-$name" env required ng \
+        "settings.json が参照するフック ~/.claude/$name に実行ビットが無い — このフックは無音で効かない" \
+        "$hook_fix"
+    fi
+  done <<EOF
+$hook_cmds
+EOF
+  if [ "$hook_bad" -eq 0 ]; then
+    emit env-hooks-present env required ok \
+      "settings.json が参照する ~/.claude 配下のフック $hook_total 件はすべて実在し実行できる"
+  fi
+else
+  emit env-hooks-present env required skip "settings.json が壊れているためフックの参照を走査できない"
+fi
+
+# ---- 7. gh トークンが管理権限を持っていないか ----
 # Claude と同じトークンに管理権限があると、監査対象の GitHub 設定そのものを
 # 書き換えられてしまう (repo-standards は防御機構ではない。ADR 0007 / setup#42)。
 # 判定は gh auth status のスコープ表示から行う。$RS_GH_AUTH_STATUS はテスト用の注入口
@@ -172,7 +226,7 @@ else
   fi
 fi
 
-# ---- 7. squash 運用で残るローカルブランチを掃除できる git 設定か ----
+# ---- 8. squash 運用で残るローカルブランチを掃除できる git 設定か ----
 # 個人標準は squash merge を required にしているが、squash は feature ブランチの
 # コミット群を main 上の別コミットへ畳むため、git branch -d / --merged では役目終了を
 # 判定できない (元コミットが main の祖先にならない)。確実に効くシグナルは
@@ -201,7 +255,7 @@ else
     "$git_fix"
 fi
 
-# ---- 8. チェックリスト正本の解決 ----
+# ---- 9. チェックリスト正本の解決 ----
 if manifest=$(resolve_standards); then
   emit env-standards-manifest env recommended ok "正本: $manifest"
 else
