@@ -396,6 +396,138 @@ check "衝突判定待ち 1 件 — fix がリポの設計意図と衝突しな�
   "衝突判定待ちが残っていれば集計が次アクションに出す"
 
 echo
+echo "verdict_source: 判定の出自と上書き規則"
+
+d=$(newrepo)
+got=$( cd "$d" && line a manual | bash "$target" save >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" --source haiku a >/dev/null 2>&1; echo $? )
+check "2" "$got" "--source の綴り違いは拒否する"
+
+d=$(newrepo)
+got=$( cd "$d" && line a manual | bash "$target" save >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" --source min a >/dev/null
+       bash "$target" list | jq -r '[.verdict, .verdict_source] | join(":")' )
+check "ok:min" "$got" "min の判定は出自つきで記録される"
+
+# --source を省いたら本監査扱い。既定を min にすると、書き戻しを 1 か所書き忘れた
+# だけで本監査の判定が暫定値として扱われる (安全側の既定は full)
+d=$(newrepo)
+got=$( cd "$d" && line a manual | bash "$target" save >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" a >/dev/null
+       bash "$target" list | jq -r .verdict_source )
+check "full" "$got" "--source 省略時は full"
+
+# 安い層の一括判定が本監査の結論を無警告で置き換えないこと (#62 の本題)
+d=$(newrepo)
+got=$( cd "$d" && line a manual | bash "$target" save >/dev/null
+       bash "$target" set --verdict ng --evidence "本監査が実ファイルを読んで下した判定" a >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" --source min a 2>/dev/null >/dev/null
+       bash "$target" list | jq -r '[.verdict, .verdict_source] | join(":")' )
+check "ng:full" "$got" "min の判定は full の判定を上書きしない"
+
+# 拒否は黙って起きない。どの id が書かれなかったかを呼び出し側が知れること
+d=$(newrepo)
+got=$( cd "$d" && line a manual | bash "$target" save >/dev/null
+       bash "$target" set --verdict ng --evidence "$EV" a >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" --source min a 2>&1 >/dev/null | head -1 \
+         | grep -c "full" )
+check "1" "$got" "上書きしなかったことを stderr で伝える"
+
+# 一括判定の途中で 1 件が保護されても、残りは書き込まれる (triage が丸ごと落ちない)
+d=$(newrepo)
+got=$( cd "$d" && { line a manual; line b manual; } | bash "$target" save >/dev/null
+       bash "$target" set --verdict ng --evidence "$EV" a >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" --source min a b 2>/dev/null >/dev/null
+       bash "$target" list | jq -r '[.id, .verdict] | join(":")' | tr '\n' ' ' )
+check "a:ng b:ok " "$got" "保護された id 以外は書き込む"
+
+# 陳腐化した full は上書きしてよい (古い判定より新しい暫定判定の方が実態に近い)
+d=$(newrepo)
+got=$( cd "$d" && line a manual | bash "$target" save >/dev/null
+       bash "$target" set --verdict ng --evidence "$EV" a >/dev/null
+       git commit -q --allow-empty -m next
+       bash "$target" set --verdict ok --evidence "$EV" --source min a 2>/dev/null >/dev/null
+       bash "$target" list | jq -r '[.verdict, .verdict_source] | join(":")' )
+check "ok:min" "$got" "陳腐化した full なら min で上書きできる"
+
+d=$(newrepo)
+got=$( cd "$d" && line a manual | bash "$target" save >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" --source min a >/dev/null
+       bash "$target" list --needs-verdict | jq -r .id )
+check "a" "$got" "min の判定は本監査の再判定対象に残る"
+
+# 反証は本監査の作法。暫定判定は反証にかける前に full の判定へ置き換わる
+d=$(newrepo)
+got=$( cd "$d" && line a manual required | bash "$target" save >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" --source min a >/dev/null
+       bash "$target" list --needs-verify | wc -l | tr -d ' ' )
+check "0" "$got" "min の判定は反証待ちに数えない"
+
+d=$(newrepo)
+got=$( cd "$d" && line a manual required | bash "$target" save >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" --source min a >/dev/null
+       bash "$target" summary | jq -r '[.provisional, .manual_unjudged, .unverified] | join(",")' )
+check "1,0,0" "$got" "暫定判定は provisional に数え、未判定・反証待ちには数えない"
+
+d=$(newrepo)
+got=$( cd "$d" && line a manual required | bash "$target" save >/dev/null
+       bash "$target" set --verdict ng --evidence "$EV" --source min a >/dev/null
+       bash "$target" summary | jq -r .hint | grep -c "暫定判定 1 件" )
+check "1" "$got" "暫定判定が残っていることを次アクションに添える"
+
+d=$(newrepo)
+got=$( cd "$d" && line a manual | bash "$target" save >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" --source min a >/dev/null
+       line a manual | bash "$target" save >/dev/null
+       bash "$target" list | jq -r '.verdict_source // "-"' )
+check "min" "$got" "再監査で status が同じなら出自も引き継ぐ"
+
+echo
+echo "機械判定を LLM 判定が覆したときの記録 (#74 の 2)"
+
+# 機械判定の warn を偽陽性として ok に覆した項目。verdict ok で decision / intent が
+# 落ちると、なぜ直さないのかの根拠が書いた直後に消える
+d=$(newrepo)
+got=$( cd "$d" && line a warn | bash "$target" save >/dev/null
+       bash "$target" set --verdict ok --evidence "集約 script 経由で実際にテストは走っている" a >/dev/null
+       bash "$target" set --intent conflicts --intent-note "$EV" a >/dev/null
+       bash "$target" set --decision rejected --note "機械判定の偽陽性のため直さない" a >/dev/null
+       bash "$target" list | jq -r '[.status, .verdict, .intent, .decision] | join(":")' )
+check "warn:ok:conflicts:rejected" "$got" "機械判定を覆しても intent / decision を保持する"
+
+# 覆した記録は再監査をまたいで残る (次のセッションで同じ確認をやり直さない)
+d=$(newrepo)
+got=$( cd "$d" && line a warn | bash "$target" save >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" a >/dev/null
+       bash "$target" set --decision rejected --note "$EV" a >/dev/null
+       line a warn | bash "$target" save >/dev/null
+       bash "$target" list | jq -r '[.verdict, .decision] | join(":")' )
+check "ok:rejected" "$got" "再監査でも覆した判定と判断を引き継ぐ"
+
+# intent を付けたら衝突判定待ちから外れること (機械 warn のまま出続けない)
+d=$(newrepo)
+got=$( cd "$d" && line a warn | bash "$target" save >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" a >/dev/null
+       bash "$target" set --intent conflicts --intent-note "$EV" a >/dev/null
+       bash "$target" list --needs-intent-check | wc -l | tr -d ' ' )
+check "0" "$got" "覆した項目は衝突判定待ちに残らない"
+
+d=$(newrepo)
+got=$( cd "$d" && { line a warn; line b ng required; } | bash "$target" save >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" a >/dev/null
+       bash "$target" summary | jq -r '[.overridden, .warn, .ng] | join(",")' )
+check "1,1,1" "$got" "覆した件数を数えつつ機械判定の事実は集計に残す"
+
+# manual 項目は従来どおり (直すものが無い項目を未決に残さない)
+d=$(newrepo)
+got=$( cd "$d" && line a manual | bash "$target" save >/dev/null
+       bash "$target" set --verdict ng --evidence "$EV" a >/dev/null
+       bash "$target" set --decision approved a >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" a >/dev/null
+       bash "$target" list | jq -r '.decision // "-"' )
+check "-" "$got" "manual 項目では ok 判定で decision が落ちる (回帰)"
+
+echo
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures 件"
   exit 1

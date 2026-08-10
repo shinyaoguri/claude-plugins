@@ -20,7 +20,7 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
 
    監査結果の JSON Lines がそのまま流れ、末尾に集計と次アクションの `_next` 行が付く。前回の判定・承認は id 単位で引き継がれる (status が変わった項目だけ未決に戻る)。`standards-manifest-missing` が出たら監査を打ち切り、その fix の内容 (setup リポのセットアップ) を案内する
 
-2. **判定** — 対象は `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh list --needs-verdict` (未判定のもの、および判定後に HEAD が進んで陳腐化したもの)。項目ごとに**並列で standards-auditor サブエージェントへ委譲**する (`subagent_type: "repo-standards:standards-auditor"`)。渡すのは判定観点 (detail) と `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-evidence.sh <id>` の出力。**材料は下限で、実ファイルを読ませる**のが本監査の要点 (材料だけで済ませるのは repo-audit-min の作法)
+2. **判定** — 対象は `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh list --needs-verdict` (未判定のもの、判定後に HEAD が進んで陳腐化したもの、および repo-audit-min が付けた暫定判定 (`verdict_source: min`))。**暫定判定は根拠が残っていても必ず判定し直す** — 安い層は畳んだ材料とファイル 3 件までで判定しており、本監査の結論として残してよい深さではない。項目ごとに**並列で standards-auditor サブエージェントへ委譲**する (`subagent_type: "repo-standards:standards-auditor"`)。渡すのは判定観点 (detail) と `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-evidence.sh <id>` の出力。**材料は下限で、実ファイルを読ませる**のが本監査の要点 (材料だけで済ませるのは repo-audit-min の作法)
 
    返ってきた `VERDICT` / `EVIDENCE` を書き戻す。根拠は 20 バイト以上が必須で、満たさなければスクリプトが拒否する:
 
@@ -49,7 +49,9 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
 
    **intent は verdict を上書きしない。** 標準から外れているという事実と、それがこのリポでは正しい逸脱かもしれないという文脈は別物で、後者で前者を消すと「外れていること」自体が見えなくなる
 
-5. レポートを提示する: `_meta` 行 (kind / repo / visibility) をヘッダに、層ごとの表 (項目 | 判定 | 意図 | 詳細)。LLM 判定の行には根拠を添え、**反証で覆った項目は覆る前後を併記する** (どこで判断が変わったかが監査の価値になる)。`intent` が `conflicts` / `unclear` の項目は**理由をそのまま載せる** — 「標準には合っていないが、このリポではこう決めている」が読み取れる形にする。末尾に `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh summary` の集計 (必須 NG / 推奨 WARN / 意図と衝突 / 未決 / 反証待ち / skip)
+5. レポートを提示する: `_meta` 行 (kind / repo / visibility) をヘッダに、層ごとの表 (項目 | 判定 | 意図 | 詳細)。LLM 判定の行には根拠を添え、**反証で覆った項目は覆る前後を併記する** (どこで判断が変わったかが監査の価値になる)。
+
+   **機械判定を LLM 判定が覆した項目** (`summary` の `overridden`。機械が ng / warn、LLM が ok / skip) も同じ扱いで、機械の status と LLM の verdict を並べ、偽陽性と判断した根拠を載せる。機械判定の status は覆らない (事実として集計に残る) ので、レポートで根拠が読めないと「直っていないのに放置されている項目」に見える。この種の項目は `decision` を `rejected` にし、`--note` に理由を残して未決から外す`intent` が `conflicts` / `unclear` の項目は**理由をそのまま載せる** — 「標準には合っていないが、このリポではこう決めている」が読み取れる形にする。末尾に `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh summary` の集計 (必須 NG / 推奨 WARN / 意図と衝突 / 未決 / 反証待ち / skip)
 
 6. 未決 (pending) が残っていれば repo-audit-fix スキルへ進み、修正シーケンスに入る。ユーザーが監査だけを求めているときを除き、報告で終わらせない
 
