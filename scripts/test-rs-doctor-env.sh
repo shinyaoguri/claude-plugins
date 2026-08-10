@@ -116,6 +116,65 @@ assert_git env-git-gone-alias warn "gone だけあり gone-clean が無い" '[al
 	gone = !git for-each-ref'
 
 echo
+echo "env-hook-* (settings.json が参照するフックの実在):"
+
+# HOME を隔離し、フックの実体を 3 種類 (正常 / 実行ビットなし / 切れた symlink) 置いた
+# ~/.claude を組み立てて、settings.json の内容だけを差し替えて検証する。
+# assert_hook <id> <期待 level/status> <ケース名> <settings.json の中身>
+# 期待を "なし" にすると「その id の行が出ないこと」を検証する (対象外の判定に使う)
+assert_hook() {
+  local id=$1 want=$2 name=$3 conf=$4
+  local h="$tmp/hookhome-$RANDOM"
+  mkdir -p "$h/.claude"
+  printf '%s\n' "$conf" > "$h/.claude/settings.json"
+  printf '#!/bin/sh\n' > "$h/.claude/good.sh"
+  chmod +x "$h/.claude/good.sh"
+  printf '#!/bin/sh\n' > "$h/.claude/noexec.sh"
+  chmod -x "$h/.claude/noexec.sh"
+  ln -s "$h/.claude/nowhere.sh" "$h/.claude/broken.sh"
+
+  local got
+  got=$( HOME="$h" GIT_CONFIG_GLOBAL="$tmp/empty-gitconfig" RS_GH_AUTH_STATUS="(認証情報なし)" \
+    bash "$target" | jq -r --arg id "$id" 'select(.id == $id) | "\(.level)/\(.status)"' )
+  [ -n "$got" ] || got="なし"
+
+  if [ "$got" = "$want" ]; then
+    echo "  [ok]   $name → $got"
+  else
+    echo "  [FAIL] $name → 期待 $want / 実際 $got"
+    failures=$((failures + 1))
+  fi
+}
+
+: > "$tmp/empty-gitconfig"
+
+hook_conf() { printf '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"%s"}]}]}}' "$1"; }
+
+assert_hook env-hooks-present required/ok "実在し実行できるフックのみ" "$(hook_conf '~/.claude/good.sh')"
+
+# 欠落・切れた symlink・実行ビットなしはいずれも「登録されているのに効かない」= required/ng
+assert_hook env-hook-missing-missing.sh required/ng "実体が無い" "$(hook_conf '~/.claude/missing.sh')"
+assert_hook env-hook-missing-broken.sh required/ng "symlink が切れている" "$(hook_conf '~/.claude/broken.sh')"
+assert_hook env-hook-not-executable-noexec.sh required/ng "実行ビットが無い" "$(hook_conf '~/.claude/noexec.sh')"
+
+# 問題を検出したら「すべて実在」の ok は出さない (集約 ok が欠落を隠さないこと)
+assert_hook env-hooks-present なし "欠落があるとき集約 ok を出さない" "$(hook_conf '~/.claude/missing.sh')"
+
+# 引数付き・$HOME 形式でも追跡できる (境界値)
+assert_hook env-hook-missing-missing.sh required/ng "引数付きでも追跡する" "$(hook_conf '~/.claude/missing.sh --flag x')"
+assert_hook env-hook-missing-missing.sh required/ng '$HOME 形式でも追跡する' "$(hook_conf '$HOME/.claude/missing.sh')"
+
+# ~/.claude 配下を指さないコマンドは対象外 (PATH 上のコマンド・他所の絶対パス)
+assert_hook env-hooks-present required/ok "PATH 上のコマンドは対象外" "$(hook_conf 'jq -e .')"
+assert_hook env-hooks-present required/ok "他所の絶対パスは対象外" "$(hook_conf '/usr/local/bin/other.sh')"
+
+# hooks を持たない settings.json でも落ちない (境界値)
+assert_hook env-hooks-present required/ok "hooks が無い settings.json" '{"model":"opus"}'
+
+# settings.json が壊れていれば走査できないので skip (ng と区別する)
+assert_hook env-hooks-present required/skip "settings.json が壊れている" '{"hooks":'
+
+echo
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures 件"
   exit 1
