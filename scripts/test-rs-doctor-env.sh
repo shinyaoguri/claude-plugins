@@ -271,6 +271,67 @@ assert_hook env-hooks-present required/ok "hooks が無い settings.json" '{"mod
 assert_hook env-hooks-present required/skip "settings.json が壊れている" '{"hooks":'
 
 echo
+echo "env-automode-* / env-ask-checkpoints (自動モードの守りが効いているか):"
+
+# HOME を隔離し、settings.json の内容だけを差し替えて検証する。
+# assert_am <id> <期待 level/status> <ケース名> <settings.json の中身>
+assert_am() {
+  local id=$1 want=$2 name=$3 conf=$4
+  local h="$tmp/amhome-$RANDOM$RANDOM"
+  mkdir -p "$h/.claude"
+  printf '%s\n' "$conf" > "$h/.claude/settings.json"
+
+  local got
+  got=$( HOME="$h" GIT_CONFIG_GLOBAL="$tmp/empty-gitconfig" RS_GH_AUTH_STATUS="(認証情報なし)" \
+    bash "$target" | jq -r --arg id "$id" 'select(.id == $id) | "\(.level)/\(.status)"' )
+  [ -n "$got" ] || got="なし"
+
+  if [ "$got" = "$want" ]; then
+    echo "  [ok]   $name → $got"
+  else
+    echo "  [FAIL] $name → 期待 $want / 実際 $got"
+    failures=$((failures + 1))
+  fi
+}
+
+# "$defaults" の欠落はこの層で一番効く検査。素で書いた配列はその節の組み込みルール
+# (force push・curl | bash・データ持ち出し・auto-mode bypass) を丸ごと捨てる
+kept='{"autoMode":{"environment":["$defaults","Source control: github.com/acme"],"hard_deny":["$defaults","Never X"]}}'
+dropped='{"autoMode":{"environment":["$defaults"],"soft_deny":["Never Y"]}}'
+
+assert_am env-automode-defaults required/ok "各配列が \$defaults を含む" "$kept"
+assert_am env-automode-defaults required/ng "soft_deny が \$defaults を落としている" "$dropped"
+
+# 節ごとに独立して評価される。1 つでも落ちていれば ng (境界値)
+assert_am env-automode-defaults required/ng "environment だけ保っていても他が落ちていれば ng" \
+  '{"autoMode":{"environment":["$defaults"],"allow":["Anything goes"],"hard_deny":["$defaults"]}}'
+
+# 配列でない値・未知のキーは検査対象外 (境界値)
+assert_am env-automode-defaults required/ok "配列でない設定は対象外" \
+  '{"autoMode":{"classifyAllShell":true,"environment":["$defaults"]}}'
+
+# autoMode 自体が無ければ $defaults の欠落は起こりえない (ng と skip を区別する)
+assert_am env-automode-defaults required/skip "autoMode ブロックが無い" '{"model":"opus"}'
+assert_am env-automode-defaults required/skip "settings.json が壊れている" '{"autoMode":'
+
+# environment が既定のままだと、分類器が信頼するのは cwd とそのリポの remote だけ
+assert_am env-automode-environment recommended/ok "固有の記述がある" "$kept"
+assert_am env-automode-environment recommended/warn "\$defaults だけ (実質未設定)" "$dropped"
+assert_am env-automode-environment recommended/warn "autoMode ブロックが無い" '{"model":"opus"}'
+
+assert_am env-automode-configured recommended/ok "defaultMode = auto" \
+  '{"permissions":{"defaultMode":"auto"}}'
+assert_am env-automode-configured recommended/warn "defaultMode が別のモード" \
+  '{"permissions":{"defaultMode":"acceptEdits"}}'
+assert_am env-automode-configured recommended/warn "defaultMode 未設定" '{"model":"opus"}'
+
+# ask ルールは分類器より前に評価され、auto モードでも必ずプロンプトになる
+assert_am env-ask-checkpoints recommended/ok "削除系のチェックポイントがある" \
+  '{"permissions":{"ask":["Bash(gh repo delete:*)"]}}'
+assert_am env-ask-checkpoints recommended/warn "ask が空" '{"permissions":{"ask":[]}}'
+assert_am env-ask-checkpoints recommended/warn "permissions が無い" '{"model":"opus"}'
+
+echo
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures 件"
   exit 1
