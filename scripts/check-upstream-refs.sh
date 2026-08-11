@@ -23,6 +23,13 @@ token_re='(CONTRACT\.md|AGENTS\.md|DEVELOPMENT\.md|CLAUDE\.md|llms[a-z-]*\.txt|e
 # プラグイン同梱スクリプト (rs- プレフィックス。repo-standards の ${CLAUDE_PLUGIN_ROOT}/scripts/)
 ignore_re='^(PROJECT_BRIEF\.md|App\.swift|scripts/rs-[a-z-]+\.sh)$'
 
+# 同梱ファイル (plugins/ 配下に実体があるもの) は定義上「上流リポへの参照」ではないので
+# マニフェスト登録を求めない。ignore_re の列挙を増やさずに済ませるための一般則で、
+# hooks/scripts/*.sh のように rs- プレフィックスを持たない同梱物もここで落ちる
+bundled() {
+  [ -n "$(find plugins -path "*/$1" -print -quit 2>/dev/null)" ]
+}
+
 coverage() {
   local entries tokens t hit e count=0
   entries=$(jq -r '.[] | .[]' "$manifest")
@@ -33,6 +40,7 @@ coverage() {
   while IFS= read -r t; do
     [ -n "$t" ] || continue
     [[ "$t" =~ $ignore_re ]] && continue
+    bundled "$t" && continue
     hit=0
     while IFS= read -r e; do
       case "$e" in *"$t"*) hit=1; break ;; esac

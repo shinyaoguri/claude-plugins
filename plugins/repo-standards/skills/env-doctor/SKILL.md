@@ -1,6 +1,6 @@
 ---
 name: env-doctor
-description: "マシン側の Claude グローバル環境を診断する (~/.claude の symlink ドリフト・setup リポの鮮度・スキル二重供給・settings.json の破損・登録済みフックの実体欠落・役目を終えたローカルブランチを掃除する git 設定)。Use when diagnosing the global Claude environment, when ~/.claude symlinks or settings look wrong, when a PreToolUse hook seems not to fire, when merged local branches pile up, or after setting up a new machine."
+description: "マシン側の Claude グローバル環境を診断する (~/.claude の symlink ドリフト・setup リポの鮮度・スキル二重供給・settings.json の破損・登録済みフックの実体欠落・役目を終えたローカルブランチを掃除する git 設定 (gone / stale の両系統))。Use when diagnosing the global Claude environment, when ~/.claude symlinks or settings look wrong, when a PreToolUse hook seems not to fire, when merged local branches pile up, or after setting up a new machine."
 allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh:*), Bash(git gone)"
 ---
 
@@ -20,7 +20,7 @@ allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh:*), Bas
    2. **playbook 再実行** — setup リポで `ansible-playbook playbook_sillicon_mac.yml --tags claude`。これが symlink を正本 (main checkout) へ張り直す唯一の正規手段。git 設定の項目 (`env-git-fetch-prune` / `env-git-gone-alias`) は同じ playbook の `--tags git` で入る
    - **フックの欠落** (`env-hook-missing-*` / `env-hook-not-executable-*`) は最優先で扱う。settings.json に登録されているのに実体が無いフックは**無音で効かない**ため、ガードがある前提の作業が無防備なまま進む。playbook を再実行しても直らないときは setup リポの tasks/claude.yml (`claude_config_files`) に対象が入っているかを確認する (`chmod +x` や手作業の `ln -s` で塞がない — 次の playbook 実行で元に戻る)
    3. **実体コピーの削除** (`env-skill-duplicate-*` など) — rm コマンドは提示のみ。実行はユーザーに委ねる
-   4. **ローカルブランチの掃除** — git 設定を入れたうえで、実際の削除は `git gone` で一覧を提示してから `git gone-clean` を案内する。**削除コマンドの実行はユーザーに委ねる** (消えるのはローカル参照だけで内容は main と `refs/pull/<N>/head` に残るが、削除系は提示に留める)
+   4. **ローカルブランチの掃除** — git 設定を入れたうえで、実際の削除は `git gone` で一覧を提示してから `git gone-clean` を案内する。**削除コマンドの実行はユーザーに委ねる** (消えるのはローカル参照だけで内容は main と `refs/pull/<N>/head` に残るが、削除系は提示に留める)。`git gone` は upstream を持つブランチしか拾わないので、push されなかったローカル専用ブランチ (`worktree-agent-*` 等) は `git stale` / `git stale-clean` の側で棚卸しする — こちらは「既定ブランチの祖先」= 内容が完全に取り込み済みのものだけが対象で、SessionStart hook (`stale-branch-sweep.sh`) が同じ判定で自動削除するため、通常は残っていない
    5. **gh トークンの権限** (`env-gh-token-admin`) — **権限の剥奪 (fine-grained PAT への切り替え) は提案しない**。実効性が「マシン上に admin トークンを残さない」に依存して崩れやすく、コストだけが残るため不採用 (setup#42)。warn は事実の可視化として扱い、bypass_actors を空にした ruleset と設定変更の検知で担保する方針であることを伝える
 4. 修正後に同じスクリプトを再実行し、before / after を提示する
 
@@ -28,7 +28,8 @@ allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh:*), Bas
 
 - symlink の正しい張り方・配布対象の正本: setup リポの tasks/claude.yml (`claude_config_files`)
 - スキル置き場のルール (汎用 / リポ固有 / 第三者配布の切り分け): setup リポの claude/CLAUDE.md (グローバル CLAUDE.md) のスキル節
-- git のグローバル設定 (fetch.prune・gone / gone-clean エイリアスの実体): setup リポの tasks/git.yml
+- git のグローバル設定 (fetch.prune・gone / gone-clean / stale / stale-clean エイリアスの実体): setup リポの tasks/git.yml
+- 取り込み済みローカルブランチの自動掃除: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/stale-branch-sweep.sh` (SessionStart)。止めたいときは `RS_BRANCH_SWEEP=0`
 - 検査項目の実装: `${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh` (すべてビルトイン。正本 JSON に依存しない)
 - 削除系 (`git gone-clean`・実体コピーの `rm`) を allowed-tools に載せていないのは意図的。提示のみに留める方針を許可の側でも担保する
 

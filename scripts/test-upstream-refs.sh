@@ -17,10 +17,13 @@ trap 'rm -rf "$tmp"' EXIT
 failures=0
 seq_no=0
 
-# case_run <ケース名> <期待 (ok|ng)> <SKILL.md 本文> <upstream-refs.json の中身>
+# case_run <ケース名> <期待 (ok|ng)> <SKILL.md 本文> <upstream-refs.json の中身> [同梱ファイル...]
 #   ok = マニフェストが本文の参照を網羅している / ng = 未登録の参照を検出する
+#   同梱ファイル = plugins/sample/ からの相対パス。疑似リポに空ファイルとして置く
+#   (実体が同梱されているトークンは定義上「上流参照」ではないので検査対象から外れる)
 case_run() {
   local name=$1 want=$2 body=$3 manifest=$4
+  shift 4
   seq_no=$((seq_no + 1))
   local dir="$tmp/case-$seq_no"
 
@@ -29,6 +32,12 @@ case_run() {
   cp "$target" "$dir/scripts/check-upstream-refs.sh"
   printf '%s\n' "$body" > "$dir/plugins/sample/skills/sample/SKILL.md"
   printf '%s\n' "$manifest" > "$dir/upstream-refs.json"
+
+  local bundled_file
+  for bundled_file in "$@"; do
+    mkdir -p "$dir/plugins/sample/$(dirname "$bundled_file")"
+    : > "$dir/plugins/sample/$bundled_file"
+  done
 
   # exit code だけで判定すると「NG 検出」と「スクリプト自体の異常終了」が区別できないので、
   # 未検出の異常終了は error として必ず落とす
@@ -80,6 +89,15 @@ case_run "プラグイン同梱スクリプト (rs-) は上流参照ではない
   "$manifest_setup"
 case_run "上流参照を含まない本文" ok \
   'cwd は問わない。診断結果を一覧で提示する。' \
+  "$manifest_setup"
+
+# --- 同梱ファイル判定 (rs- プレフィックスを持たない hooks/scripts/*.sh を本文が指した回) ---
+case_run "同梱 hook スクリプト (rs- なし) は上流参照ではない" ok \
+  '掃除は SessionStart hook の hooks/scripts/stale-branch-sweep.sh が行う。' \
+  "$manifest_setup" \
+  hooks/scripts/stale-branch-sweep.sh
+case_run "同梱されていない scripts/*.sh は従来どおり検出する" ng \
+  '契約の検査は scripts/check-contract.sh が担当する。' \
   "$manifest_setup"
 
 echo
