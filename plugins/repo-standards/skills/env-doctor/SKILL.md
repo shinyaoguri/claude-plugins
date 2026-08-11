@@ -1,6 +1,6 @@
 ---
 name: env-doctor
-description: "マシン側の Claude グローバル環境を診断する (~/.claude の symlink ドリフト・setup リポの鮮度・スキル二重供給・settings.json の破損・登録済みフックの実体欠落・役目を終えたローカルブランチを掃除する git 設定 (gone / stale の両系統))。Use when diagnosing the global Claude environment, when ~/.claude symlinks or settings look wrong, when a PreToolUse hook seems not to fire, when merged local branches pile up, or after setting up a new machine."
+description: "マシン側の Claude グローバル環境を診断する (~/.claude の symlink ドリフト・setup リポの鮮度・スキル二重供給・settings.json の破損・登録済みフックの実体欠落・自動モード (auto mode) の守りが効いているか・役目を終えたローカルブランチを掃除する git 設定 (gone / stale の両系統))。Use when diagnosing the global Claude environment, when ~/.claude symlinks or settings look wrong, when a PreToolUse hook seems not to fire, when auto mode blocks or over-permits actions, when merged local branches pile up, or after setting up a new machine."
 allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh:*), Bash(git gone)"
 ---
 
@@ -18,6 +18,7 @@ allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh:*), Bas
 3. 修正はこの順序で提案する。**手作業での symlink 張り直しは案内しない** (正規経路は常に ansible):
    1. **setup リポの状態整理** — リンク先 checkout に未コミット差分 (`env-linked-checkout-dirty`) があれば `git diff` を提示し、コミット / PR するか破棄するかをユーザーに確認する。判断せず先へ進まない
    2. **playbook 再実行** — setup リポで `ansible-playbook playbook_sillicon_mac.yml --tags claude`。これが symlink を正本 (main checkout) へ張り直す唯一の正規手段。git 設定の項目 (`env-git-fetch-prune` / `env-git-gone-alias`) は同じ playbook の `--tags git` で入る
+   - **自動モードの守り** (`env-automode-*` / `env-ask-checkpoints`) はフックの欠落と同列で最優先。承認プロンプトを消すほど、危険な操作を止める役目は分類器へ寄る。とくに `env-automode-defaults` の ng は **`"$defaults"` を書き忘れた配列が組み込みルール (force push・`curl | bash`・データ持ち出し・auto-mode bypass) を丸ごと捨てている**状態で、緩めた自覚が残らない。修正先は必ず setup リポの claude/settings.json (`~/.claude/settings.json` は symlink)。適用後に `claude auto-mode config` で展開後の実効ルールを確認し、自作ルールを足したなら `claude auto-mode critique` にレビューさせる。**プロジェクトの .claude/settings.json やプラグインからは供給できない** (リポが自分でルールを緩められないための公式仕様) ので、「対象リポに置けばよいのでは」と提案しない
    - **フックの欠落** (`env-hook-missing-*` / `env-hook-not-executable-*`) は最優先で扱う。settings.json に登録されているのに実体が無いフックは**無音で効かない**ため、ガードがある前提の作業が無防備なまま進む。playbook を再実行しても直らないときは setup リポの tasks/claude.yml (`claude_config_files`) に対象が入っているかを確認する (`chmod +x` や手作業の `ln -s` で塞がない — 次の playbook 実行で元に戻る)
    3. **実体コピーの削除** (`env-skill-duplicate-*` など) — rm コマンドは提示のみ。実行はユーザーに委ねる
    4. **ローカルブランチの掃除** — git 設定を入れたうえで、実際の削除は `git gone` で一覧を提示してから `git gone-clean` を案内する。**削除コマンドの実行はユーザーに委ねる** (消えるのはローカル参照だけで内容は main と `refs/pull/<N>/head` に残るが、削除系は提示に留める)。`git gone` は upstream を持つブランチしか拾わないので、push されなかったローカル専用ブランチ (`worktree-agent-*` 等) は `git stale` / `git stale-clean` の側で棚卸しする — こちらは「既定ブランチの祖先」= 内容が完全に取り込み済みのものだけが対象で、SessionStart hook (`stale-branch-sweep.sh`) が同じ判定で自動削除するため、通常は残っていない
@@ -29,7 +30,9 @@ allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh:*), Bas
 - symlink の正しい張り方・配布対象の正本: setup リポの tasks/claude.yml (`claude_config_files`)
 - スキル置き場のルール (汎用 / リポ固有 / 第三者配布の切り分け): setup リポの claude/CLAUDE.md (グローバル CLAUDE.md) のスキル節
 - git のグローバル設定 (fetch.prune・gone / gone-clean / stale / stale-clean エイリアスの実体): setup リポの tasks/git.yml
+- 自動モードの設定 (`permissions.defaultMode` / `permissions.ask` / `autoMode.{environment,allow,soft_deny,hard_deny}`) の正本: setup リポの claude/settings.json。組み込みルールの実物は `claude auto-mode defaults`
 - 取り込み済みローカルブランチの自動掃除: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/stale-branch-sweep.sh` (SessionStart)。止めたいときは `RS_BRANCH_SWEEP=0`
+- 合意の無いまま実装が広がるのを止めるプランゲート: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/plan-gate.sh` (PreToolUse)。閾値は `RS_PLAN_GATE_THRESHOLD`、止めたいときは `RS_PLAN_GATE=0`
 - 検査項目の実装: `${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh` (すべてビルトイン。正本 JSON に依存しない)
 - 削除系 (`git gone-clean`・実体コピーの `rm`) を allowed-tools に載せていないのは意図的。提示のみに留める方針を許可の側でも担保する
 

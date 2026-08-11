@@ -196,7 +196,70 @@ else
   emit env-hooks-present env required skip "settings.json が壊れているためフックの参照を走査できない"
 fi
 
-# ---- 7. gh トークンが管理権限を持っていないか ----
+# ---- 7. 自動モード (auto mode) の守りが効いているか ----
+# 承認プロンプトを消す本体は auto mode で、危険な操作を止めるのは分類器の役目になる。
+# 分類器が読む設定は ~/.claude/settings.json の autoMode ブロックだけで、プロジェクト
+# 設定とプラグインからは供給できない (リポが自分でルールを緩められないための公式仕様)。
+# つまりこの層の健全性はマシン側でしか見られない。
+#
+# 一番効くのは "$defaults" の欠落検査。配列を素で書くと**その節の組み込みルールを
+# 丸ごと捨てる** (force push・curl | bash・本番デプロイ・データ持ち出し・auto-mode
+# bypass)。緩めた自覚が残らないまま守りが消えるので required で落とす。
+automode_fix="~/.claude/settings.json (正本は setup リポの claude/settings.json) の autoMode の各配列に \"\$defaults\" を含める。claude auto-mode defaults で組み込みルールを確認し、claude auto-mode config で展開後の実効ルールを確かめる"
+if [ "$settings_valid" -eq 1 ]; then
+  settings="$claude_dir/settings.json"
+
+  if jq -e '.autoMode | type == "object"' "$settings" >/dev/null 2>&1; then
+    bare=$(jq -r '.autoMode | to_entries[]
+      | select(.key == "allow" or .key == "soft_deny" or .key == "hard_deny" or .key == "environment")
+      | select((.value | type) == "array")
+      | select((.value | index("$defaults")) == null) | .key' "$settings" 2>/dev/null | tr '\n' ' ')
+    bare=${bare% }
+    if [ -n "$bare" ]; then
+      emit env-automode-defaults env required ng \
+        "autoMode の $bare が \"\$defaults\" を含まない — この節の組み込みルール (force push・curl | bash・データ持ち出し・auto-mode bypass 等) を丸ごと捨てている" \
+        "$automode_fix"
+    else
+      emit env-automode-defaults env required ok "autoMode の各配列は \"\$defaults\" を含む (組み込みルールを保ったまま拡張している)"
+    fi
+
+    extras=$(jq -r '[(.autoMode.environment // [])[] | select(. != "$defaults")] | length' "$settings" 2>/dev/null)
+    if [ "${extras:-0}" -gt 0 ]; then
+      emit env-automode-environment env recommended ok "autoMode.environment に固有の記述が ${extras} 件 (分類器が信頼する範囲を宣言済み)"
+    else
+      emit env-automode-environment env recommended warn \
+        "autoMode.environment が既定のまま — 分類器が信頼するのは cwd とそのリポの remote だけで、自分の org や内部サービスへの操作は黙ってブロックされる" \
+        "settings.json の autoMode.environment に \"\$defaults\" と併せて Organization / Source control / Key internal services を書き、claude auto-mode config で反映を確認する"
+    fi
+  else
+    emit env-automode-defaults env required skip "autoMode ブロックが無いため \$defaults の欠落は起こりえない"
+    emit env-automode-environment env recommended warn \
+      "autoMode ブロックが無い — 分類器が信頼するのは cwd とそのリポの remote だけ" \
+      "settings.json に autoMode.environment を足して信頼するインフラを宣言する"
+  fi
+
+  mode=$(jq -r '.permissions.defaultMode // ""' "$settings" 2>/dev/null)
+  if [ "$mode" = "auto" ]; then
+    emit env-automode-configured env recommended ok "permissions.defaultMode = auto (承認プロンプトを分類器へ寄せている)"
+  else
+    emit env-automode-configured env recommended warn \
+      "permissions.defaultMode が auto でない (${mode:-未設定}) — 承認が実行のたびに出る一方、分類器による意味判定も効かない" \
+      "settings.json の permissions.defaultMode を \"auto\" にする (ユーザー設定でのみ有効。プロジェクト設定からは指定できない)"
+  fi
+
+  asks=$(jq -r '(.permissions.ask // []) | length' "$settings" 2>/dev/null)
+  if [ "${asks:-0}" -gt 0 ]; then
+    emit env-ask-checkpoints env recommended ok "permissions.ask のチェックポイントが ${asks} 件 (auto モードでも必ず人間に返る境界)"
+  else
+    emit env-ask-checkpoints env recommended warn \
+      "permissions.ask が空 — 取り返しのつかない操作 (リポ・リリースの削除など) でも人間に返らない" \
+      "settings.json の permissions.ask に削除系のチェックポイントを置く。ask ルールは分類器より前に評価され、auto モードでも必ずプロンプトになる"
+  fi
+else
+  emit env-automode-defaults env required skip "settings.json が壊れているため autoMode を読めない"
+fi
+
+# ---- 8. gh トークンが管理権限を持っていないか ----
 # Claude と同じトークンに管理権限があると、監査対象の GitHub 設定そのものを
 # 書き換えられてしまう (repo-standards は防御機構ではない。ADR 0007 / setup#42)。
 # 判定は gh auth status のスコープ表示から行う。$RS_GH_AUTH_STATUS はテスト用の注入口
@@ -226,7 +289,7 @@ else
   fi
 fi
 
-# ---- 8. squash 運用で残るローカルブランチを掃除できる git 設定か ----
+# ---- 9. squash 運用で残るローカルブランチを掃除できる git 設定か ----
 # 個人標準は squash merge を required にしているが、squash は feature ブランチの
 # コミット群を main 上の別コミットへ畳むため、git branch -d / --merged では役目終了を
 # 判定できない (元コミットが main の祖先にならない)。確実に効くシグナルは
@@ -271,7 +334,7 @@ else
     "$git_fix"
 fi
 
-# ---- 9. チェックリスト正本の解決 ----
+# ---- 10. チェックリスト正本の解決 ----
 if manifest=$(resolve_standards); then
   emit env-standards-manifest env recommended ok "正本: $manifest"
 else
