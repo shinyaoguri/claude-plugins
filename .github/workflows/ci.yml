@@ -48,6 +48,7 @@ jobs:
           ./scripts/test-rs-findings.sh
           ./scripts/test-rs-doctor-env.sh
           ./scripts/test-rs-ci-watch.sh
+          ./scripts/test-rs-branch-sweep.sh
           ./scripts/test-repo-settings.sh
       - name: リポ側チェックスクリプトの判定テスト
         run: |

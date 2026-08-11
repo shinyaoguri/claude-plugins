@@ -255,6 +255,22 @@ else
     "$git_fix"
 fi
 
+# [gone] 判定は upstream を持つブランチしか拾えない。一度も push していない
+# ローカル専用ブランチ (Claude Code の worktree 分離が作る worktree-agent-* 等) は
+# 別のシグナル =「既定ブランチの祖先である」で拾う。SessionStart hook の
+# stale-branch-sweep.sh が同じ判定で自動削除する (経緯: claude-plugins#95)
+missing=""
+for a in stale stale-clean; do
+  git config --global --get "alias.$a" >/dev/null 2>&1 || missing="$missing $a"
+done
+if [ -z "$missing" ]; then
+  emit env-git-stale-alias env recommended ok "alias.stale / alias.stale-clean が設定済み (既定ブランチに取り込み済みのローカルブランチの一覧と削除)"
+else
+  emit env-git-stale-alias env recommended warn \
+    "git のエイリアスが未設定 ($missing) — push されなかったローカルブランチ (worktree-agent-* 等) を棚卸しする手立てが無い" \
+    "$git_fix"
+fi
+
 # ---- 9. チェックリスト正本の解決 ----
 if manifest=$(resolve_standards); then
   emit env-standards-manifest env recommended ok "正本: $manifest"
