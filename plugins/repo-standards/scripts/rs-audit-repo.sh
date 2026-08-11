@@ -34,6 +34,17 @@ fi
 jq -cn --arg kind "$kind" --arg root "$root" --arg vis "$visibility" --arg manifest "$manifest" \
   '{id:"_meta",layer:"repo",kind:$kind,root:$root,visibility:$vis,manifest:$manifest}'
 
+# コミットが 1 件も無いリポは監査でなく生成の対象。全項目を並べても「まだ何も無い」の
+# 言い換えにしかならず、README・CLAUDE.md・CI のようにリポの実体を材料にする生成的 fix は
+# 空虚な雛形しか作れない。判定を打ち切って repo-bootstrap へ渡す (LLM の裁量に委ねず
+# ここで決める — 空リポでは LLM 判定と反証が全件空振りし、そのぶんがまるごと無駄になる)
+if ! git rev-parse --verify -q HEAD >/dev/null 2>&1; then
+  emit repo-uninitialized meta required ng \
+    "コミットが 1 件も無い — 標準と突き合わせる対象がまだ無い (監査ではなく雛形生成の段階)" \
+    "repo-bootstrap スキルで個人標準どおりの雛形を生成する (git init 済みなので初期化は飛ばし、未追跡ファイルは残したまま追加する)"
+  exit 0
+fi
+
 # ---- builtin 検査 (正本の check.name から呼ばれる) ----
 
 builtin_gitignore_covers_env() { # ok / fail / skip:<理由>

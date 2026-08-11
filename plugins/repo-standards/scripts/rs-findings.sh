@@ -190,9 +190,12 @@ cmd_list() {
         and ($r.level == "required" or $eff == "ng" or $eff == "warn")))
     | select($it == "" or (($it | split(",")) | index($r.intent // "")))
     # 衝突判定待ち: 標準から外れている項目のうち、まだ意図と突き合わせていないもの。
-    # 機械判定の ng / warn も対象に含む — LLM が文脈を持ち込める唯一の接点なので
+    # 機械判定の ng / warn も対象に含む — LLM が文脈を持ち込める唯一の接点なので。
+    # layer=meta (正本不在・未初期化) だけは除く。監査そのものの前提を報告する行で、
+    # リポの設計意図と衝突しうる「標準への適合」ではない
     | select($intentchk == 0 or (
-        ($eff == "ng" or $eff == "warn") and (($r.intent // "") == "")))
+        ($eff == "ng" or $eff == "warn") and (($r.intent // "") == "")
+        and ($r.layer != "meta")))
   ' "$file"
 }
 
@@ -369,7 +372,8 @@ cmd_summary() {
     | (map(select((.status == "ng" or .status == "warn")
                   and ((.verdict // "") == "ok" or (.verdict // "") == "skip")))
        | length) as $overridden
-    | (map(select((._eff == "ng" or ._eff == "warn") and ((.intent // "") == "")))
+    | (map(select((._eff == "ng" or ._eff == "warn") and ((.intent // "") == "")
+                  and (.layer != "meta")))
        | length) as $intent_unchecked
     | (map(select(.intent == "conflicts")) | length) as $conflicts
     # 適用したのに status が変わらない項目。再監査で status が動けば decision は
@@ -392,6 +396,11 @@ cmd_summary() {
        applied_unresolved: $unresolved,
        hint:
          ((if length == 0 then "findings が空 (先に監査を実行する)"
+           # 監査そのものの前提が欠けている状態。修正フローへ送っても直す対象が並んで
+           # いないので、fix (次に行くべきスキル) をそのまま次の一手として出す
+           elif (map(select(.layer == "meta" and (._eff == "ng" or ._eff == "warn"))) | length) > 0
+             then (map(select(.layer == "meta" and (._eff == "ng" or ._eff == "warn")))[0]
+                   | "\(.id) — \(.fix // "監査を続ける前提が欠けている")")
            elif $mp > 0 then "manual \($mp) 件が未判定 — 判定して rs-findings.sh set --verdict で記録する"
            elif $unverified > 0 then "反証待ち \($unverified) 件 — 独立した判定者に覆せるか確かめて set --verified で記録する"
            elif $intent_unchecked > 0 then "衝突判定待ち \($intent_unchecked) 件 — fix がリポの設計意図と衝突しないか確かめて set --intent で記録する"

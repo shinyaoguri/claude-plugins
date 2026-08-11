@@ -42,9 +42,9 @@ newrepo() {
   printf '%s\n' "$d"
 }
 
-line() { # line <id> <status> [level]
-  jq -cn --arg id "$1" --arg st "$2" --arg lv "${3:-recommended}" \
-    '{id:$id,layer:"repo",level:$lv,status:$st,detail:"テスト用",fix:"テスト用"}'
+line() { # line <id> <status> [level] [layer]
+  jq -cn --arg id "$1" --arg st "$2" --arg lv "${3:-recommended}" --arg ly "${4:-repo}" \
+    '{id:$id,layer:$ly,level:$lv,status:$st,detail:"テスト用",fix:"テスト用"}'
 }
 
 echo "save: 保存と decision の初期化"
@@ -378,6 +378,37 @@ got=$( cd "$d" && line a manual required | bash "$target" save >/dev/null
        bash "$target" set --verdict ng --evidence "$EV" a >/dev/null
        bash "$target" list --needs-intent-check | jq -r .id )
 check "a" "$got" "LLM 判定で ng になった項目も衝突判定の対象になる"
+
+# layer=meta (正本不在・未初期化) は監査そのものの前提を報告する行であって、リポの設計
+# 意図と衝突しうる「標準への適合」ではない。回すと材料ゼロの判定を 1 本無駄に起こす
+d=$(newrepo)
+got=$( cd "$d" && { line a ng required; line repo-uninitialized ng required meta; } \
+         | bash "$target" save >/dev/null
+       bash "$target" list --needs-intent-check | jq -r .id | tr '\n' ' ' )
+check "a " "$got" "layer=meta は衝突判定の対象に入れない"
+
+# ng には数え続ける (前提が欠けている事実は集計から消さない)
+d=$(newrepo)
+got=$( cd "$d" && line repo-uninitialized ng required meta | bash "$target" save >/dev/null
+       bash "$target" summary | jq -r '[.ng, .intent_unchecked] | join(",")' )
+check "1,0" "$got" "layer=meta は ng に数えるが衝突判定待ちには数えない"
+
+# 前提が欠けているときは修正フローでなく、その項目の fix (次に行くべきスキル) を出す。
+# 直す対象が findings に並んでいないので、repo-audit-fix へ送っても空振りする
+d=$(newrepo)
+got=$( cd "$d" && { line a ng required; line repo-uninitialized ng required meta; } \
+         | bash "$target" save >/dev/null
+       bash "$target" summary | jq -r .hint )
+check "repo-uninitialized — テスト用" "$got" "meta の未解決があれば fix をそのまま次の一手に出す"
+
+# 解消したら通常の次アクションに戻る (打ち切りの案内が居座らない)
+d=$(newrepo)
+got=$( cd "$d" && { line a ng required; line repo-uninitialized ng required meta; } \
+         | bash "$target" save >/dev/null
+       bash "$target" set --intent aligned --intent-note "$EV" a >/dev/null
+       { line a ng required; line repo-uninitialized ok required meta; } | bash "$target" save >/dev/null
+       bash "$target" summary | jq -r .hint )
+check "未決 1 件 — repo-audit-fix スキルで承認・適用できる" "$got" "meta が解消したら通常の次アクションに戻る"
 
 # 標準を満たしていると判定し直した項目に衝突理由が残ると、同じセッションの
 # レポートが「ok なのに意図と衝突」という読めない行を出す

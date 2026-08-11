@@ -148,6 +148,19 @@ else
   fail "正本不在 → exit=$c / 出力: $o"
 fi
 
+# コミットが 1 件も無いリポは監査でなく雛形生成の段階。修正フローへ送ると、リポの実体を
+# 材料にする生成的 fix (README・CLAUDE.md・CI) が空虚な雛形にしかならない
+uninit="$tmp/uninitialized"
+mkdir -p "$uninit"
+( cd "$uninit" && git init -q -b main ) >/dev/null 2>&1
+o=$( cd "$uninit" && REPO_STANDARDS_JSON="$manifest" bash "$target" --no-github ); c=$?
+if [ "$c" -eq 0 ] && grep -q '^NG   *repo-uninitialized' <<<"$o" \
+   && grep -q '次: コミットがまだ無い' <<<"$o" && grep -q '/repo-bootstrap' <<<"$o"; then
+  ok "コミット 0 件 → 次の一手に /repo-bootstrap を出す"
+else
+  fail "コミット 0 件 → exit=$c / 出力: $o"
+fi
+
 echo
 echo "出力の総量 (簡易監査であり続けるための上限):"
 

@@ -18,7 +18,14 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
    { bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-repo.sh; bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-github.sh; } | bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh save
    ```
 
-   監査結果の JSON Lines がそのまま流れ、末尾に集計と次アクションの `_next` 行が付く。前回の判定・承認は id 単位で引き継がれる (status が変わった項目だけ未決に戻る)。`standards-manifest-missing` が出たら監査を打ち切り、その fix の内容 (setup リポのセットアップ) を案内する
+   監査結果の JSON Lines がそのまま流れ、末尾に集計と次アクションの `_next` 行が付く。前回の判定・承認は id 単位で引き継がれる (status が変わった項目だけ未決に戻る)。
+
+   **`layer: meta` の項目が出たらここで打ち切る** — 判定を続ける前提が欠けている:
+
+   | id | 次にやること |
+   |---|---|
+   | `standards-manifest-missing` | fix の内容 (setup リポのセットアップ) を案内する |
+   | `repo-uninitialized` | **repo-bootstrap スキルへ渡す**。コミットが 1 件も無いリポは監査でなく雛形生成の段階で、スクリプトも他の項目を並べずこの 1 件だけを返す。手順 2 以降を回しても、判定対象のファイルが存在しないので LLM 判定・反証・衝突判定が全件空振りする |
 
 2. **判定** — 対象は `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh list --needs-verdict` (未判定のもの、判定後に HEAD が進んで陳腐化したもの、および repo-audit-min が付けた暫定判定 (`verdict_source: min`))。**暫定判定は根拠が残っていても必ず判定し直す** — 安い層は畳んだ材料とファイル 3 件までで判定しており、本監査の結論として残してよい深さではない。項目ごとに**並列で standards-auditor サブエージェントへ委譲**する (`subagent_type: "repo-standards:standards-auditor"`)。渡すのは判定観点 (detail) と `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-evidence.sh <id>` の出力。**材料は下限で、実ファイルを読ませる**のが本監査の要点 (材料だけで済ませるのは repo-audit-min の作法)
 

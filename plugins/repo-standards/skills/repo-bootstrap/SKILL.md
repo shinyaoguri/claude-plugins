@@ -7,6 +7,8 @@ allowed-tools: "Bash(jq:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-git
 
 新しいリポジトリの雛形を個人標準どおりに作る。既存リポの監査は /repo-audit を使う (このスキルは生成が目的)。
 
+**コミットが 1 件も無いリポは監査側から渡されて来る** — repo-audit / repo-audit-min は `repo-uninitialized` で判定を打ち切り、このスキルを次の一手として指す。その経路では `git init` が済んでいるので手順 3 の初期化を飛ばす。
+
 ## 手順
 
 1. 正本を読み、リポ種別を決める。`--kind` 指定が無ければ選択肢を提示して 1 問だけ聞く:
@@ -23,7 +25,12 @@ allowed-tools: "Bash(jq:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-git
      | select(.level != "rejected") | [.level, .id, .fix // ""] | @tsv' ~/.claude/repo-standards.json
    ```
 
-3. `git init` (default branch は main) → 各項目の `fix` の方針に沿ってファイルを生成 → 初回コミット。新規リポなのでこの初回コミットだけ main 直コミットでよい
+   **生成に要る材料もこのとき 1 回でまとめて聞く** — リポの目的 (README の 1 行)、検証コマンド (CLAUDE.md と CI に載る)、LICENSE (既定は MIT)。marker ファイルすら無い段階なのでリポから読めるものはほぼ無く、聞かずに書くと見出しだけの雛形になる。答えが得られなかった項目は生成せず、後から /repo-audit-fix で埋める
+
+3. `git init` (default branch は main。**既に init 済みなら飛ばす**) → 各項目の `fix` の方針に沿ってファイルを生成 → 初回コミット。新規リポなのでこの初回コミットだけ main 直コミットでよい
+
+   - **既にある未追跡ファイルは上書きしない** — 生成対象と同名のファイルがあれば、その中身を材料として足りない節を書き足す
+   - **ディレクトリだけ作らない** — git は空ディレクトリを追跡しないので、`docs/decisions/` やテストディレクトリは中身と一緒に作る (でないと初回コミットに乗らず、直後の確認で未整備のまま出る)
 4. ユーザーが望めば `gh repo create` + push し、`bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-github.sh` の NG 項目の fix コマンドを提示 → 承認後に適用する
 5. 仕上げに簡易監査で green を確認する (判定ロジックをここに複製しない):
 

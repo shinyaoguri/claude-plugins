@@ -62,6 +62,7 @@ printf '%s\n' "$raw" | jq -sr --argjson w "$width" --argjson save "$save" --argj
   | (reduce $rows[] as $r ({}; .[$r.status] = ((.[$r.status] // 0) + 1))) as $c
   | (($c.ng // 0) + ($c.warn // 0)) as $bad
   | ($rows | map(select(.id == "standards-manifest-missing")) | length > 0) as $nomanifest
+  | ($rows | map(select(.id == "repo-uninitialized")) | length > 0) as $uninit
   # GitHub 上のリポを特定できたときだけ repo= を名乗る。特定できないときに
   # 作業ディレクトリ名を repo= として出すと、worktree 名などを GitHub のリポ名と
   # 取り違えるので、キー自体を dir= に変えて出所を明示する
@@ -80,6 +81,9 @@ printf '%s\n' "$raw" | jq -sr --argjson w "$width" --argjson save "$save" --argj
     + [ "ok=\($c.ok // 0) ng=\($c.ng // 0) warn=\($c.warn // 0) skip=\($c.skip // 0) manual=\($c.manual // 0)" ]
     + [ "次: "
         + (if $nomanifest then "正本 repo-standards.json が無い — setup リポのセットアップが先"
+           # 監査でなく生成の段階。修正フローへ送っても、リポの実体を材料にする
+           # 生成的 fix (README・CLAUDE.md・CI) が空虚な雛形にしかならない
+           elif $uninit then "コミットがまだ無い — 監査でなく雛形生成の段階。/repo-bootstrap で作る"
            elif $save == 1 and $saved == 0 then "findings に保存できない (git リポジトリ外)"
            elif $bad == 0 then "機械判定は逸脱なし"
            elif $save == 1 then "findings に保存済み。修正は /repo-audit-fix (確度が要るなら /repo-audit)"

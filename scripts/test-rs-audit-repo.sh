@@ -86,12 +86,18 @@ EOF
 # assert が検証する項目 id (セクションごとに切り替える)
 check_id=adr-exists
 
+# 初回コミットを打つか。コミットが 1 件も無いリポは監査を打ち切る仕様なので、個々の
+# builtin を見るケースでは必ず打つ (未初期化の打ち切りそのものを見るセクションだけ 0 にする)
+init_commit=1
+
 # assert <期待 status> <ケース名> <セットアップコマンド...>
 assert() {
   local want=$1 name=$2; shift 2
   local dir="$tmp/case-$RANDOM"
   mkdir -p "$dir"
-  ( cd "$dir" && git init -q -b main && "$@" ) || { echo "  [ERROR] $name: セットアップ失敗"; failures=$((failures + 1)); return; }
+  ( cd "$dir" && git init -q -b main \
+      && { [ "$init_commit" -eq 0 ] || git commit -q --allow-empty -m init; } \
+      && "$@" ) || { echo "  [ERROR] $name: セットアップ失敗"; failures=$((failures + 1)); return; }
 
   local got
   got=$( cd "$dir" && REPO_STANDARDS_JSON="$manifest" bash "$target" \
@@ -193,7 +199,7 @@ assert warn "呼ばれている script にテストが無い" \
 # 集約経由で ok にした項目は、どう見つけたかを detail に残す (ok:<詳細> の出力契約)
 agg_dir="$tmp/aggregate-detail"
 mkdir -p "$agg_dir"
-( cd "$agg_dir" && git init -q -b main &&
+( cd "$agg_dir" && git init -q -b main && git commit -q --allow-empty -m init &&
   mkdir -p scripts .github/workflows && touch scripts/test-foo.sh &&
   printf "jobs:\n  t:\n    steps:\n      - run: npm run check\n" > .github/workflows/ci.yml &&
   printf '{"scripts":{"check":"npm test"}}\n' > package.json &&
@@ -254,8 +260,7 @@ mk_remote_branch() { # <name> <何日前>
 export -f mk_remote_branch
 
 # 正常系: リモートブランチが無い
-assert ok "リモートブランチが無い" \
-  bash -c 'git commit -q --allow-empty -m init'
+assert ok "リモートブランチが無い" true
 
 # 境界値: 29 日前は「作業中」の範囲
 assert ok "29 日前のブランチは残骸としない" \
@@ -277,16 +282,13 @@ echo "builtin_worktrees_clean (orphan 判定):"
 check_id=worktrees-clean
 
 # 正常系: worktree を使っていない
-assert ok ".claude/worktrees が無い" \
-  bash -c 'git commit -q --allow-empty -m init'
+assert ok ".claude/worktrees が無い" true
 
 # 正常系: ディレクトリはあるが中身が無い
-assert ok ".claude/worktrees が空" \
-  bash -c 'git commit -q --allow-empty -m init && mkdir -p .claude/worktrees'
+assert ok ".claude/worktrees が空" mkdir -p .claude/worktrees
 
 # 失敗系: git に登録されていないディレクトリが残っている (worktree remove を忘れた状態)
-assert warn "git 未登録のディレクトリが残っている" \
-  bash -c 'git commit -q --allow-empty -m init && mkdir -p .claude/worktrees/leftover'
+assert warn "git 未登録のディレクトリが残っている" mkdir -p .claude/worktrees/leftover
 
 echo
 echo "builtin_worktrees_clean (容量と安全に消せる候補):"
@@ -374,7 +376,7 @@ cat > "$fk_dir/m.json" <<'EOF'
 }
 EOF
 mkdir -p "$fk_dir/repo"
-( cd "$fk_dir/repo" && git init -q -b main ) >/dev/null 2>&1
+( cd "$fk_dir/repo" && git init -q -b main && git commit -q --allow-empty -m init ) >/dev/null 2>&1
 out=$( cd "$fk_dir/repo" && REPO_STANDARDS_JSON="$fk_dir/m.json" bash "$target" )
 got=$(jq -r 'select(.id == "with-kind") | .fix_kind // "-"' <<<"$out")
 if [ "$got" = "generative" ]; then
@@ -403,6 +405,68 @@ if [ "$(jq -r .status <<<"$line")" = "ng" ] && [ "$(jq -r .level <<<"$line")" = 
   echo "  [ok]   git リポ外 → required/ng で報告"
 else
   echo "  [FAIL] git リポ外 → 期待 required/ng / 実際 $(jq -r '"\(.level)/\(.status)"' <<<"$line")"
+  failures=$((failures + 1))
+fi
+
+# コミットが 1 件も無いリポは監査でなく雛形生成の段階。全項目を並べても「まだ何も無い」の
+# 言い換えにしかならず、LLM 判定と反証がまるごと空振りするので、ここで打ち切って
+# repo-bootstrap へ渡す。「打ち切る」ことまで固定しないと空振りのコストが戻ってくる
+uninit_out() { # <セットアップコマンド...>
+  local dir="$tmp/uninit-$RANDOM"
+  mkdir -p "$dir"
+  ( cd "$dir" && git init -q -b main && "$@" ) >/dev/null 2>&1
+  ( cd "$dir" && REPO_STANDARDS_JSON="$manifest" bash "$target" )
+}
+
+out=$(uninit_out true)
+line=$(jq -c 'select(.id == "repo-uninitialized")' <<<"$out")
+if [ "$(jq -r .status <<<"$line")" = "ng" ] && [ "$(jq -r .level <<<"$line")" = "required" ]; then
+  echo "  [ok]   コミットが 1 件も無い → required/ng で報告"
+else
+  echo "  [FAIL] コミットが 1 件も無い → 期待 required/ng / 実際 $(jq -r '"\(.level)/\(.status)"' <<<"$line")"
+  failures=$((failures + 1))
+fi
+
+# fix が次の一手 (repo-bootstrap) を指していないと、受け手はどこへ行けばよいか分からない
+if grep -q 'repo-bootstrap' <<<"$(jq -r .fix <<<"$line")"; then
+  echo "  [ok]   fix が repo-bootstrap を指す"
+else
+  echo "  [FAIL] fix が repo-bootstrap を指していない → $(jq -r .fix <<<"$line")"
+  failures=$((failures + 1))
+fi
+
+# 打ち切りの実効: _meta (レポートのヘッダ) 以外はこの 1 件だけ
+n=$(jq -r 'select(.id != "_meta") | .id' <<<"$out" | grep -c .)
+if [ "$n" = "1" ]; then
+  echo "  [ok]   他の項目は並べずに打ち切る"
+else
+  echo "  [FAIL] 打ち切っていない → $n 件出力: $(jq -r 'select(.id != "_meta") | .id' <<<"$out" | tr '\n' ' ')"
+  failures=$((failures + 1))
+fi
+
+# レポートのヘッダは残す (打ち切っても対象リポがどれかは示す)
+if [ "$(jq -r 'select(.id == "_meta") | .kind' <<<"$out")" = "generic" ]; then
+  echo "  [ok]   打ち切っても _meta は出す"
+else
+  echo "  [FAIL] _meta が出ていない"
+  failures=$((failures + 1))
+fi
+
+# 境界値: git init しただけの既存ディレクトリ (未追跡ファイルはあるがコミットは無い)
+got=$(jq -r 'select(.id == "repo-uninitialized") | .status' <<<"$(uninit_out bash -c 'echo hi > README.md')")
+if [ "$got" = "ng" ]; then
+  echo "  [ok]   未追跡ファイルがあってもコミット 0 件なら打ち切る"
+else
+  echo "  [FAIL] 未追跡ファイルがあるケース → 期待 ng / 実際 $got"
+  failures=$((failures + 1))
+fi
+
+# 正常系: コミットが 1 件でもあれば通常の監査に戻る (打ち切りが広がりすぎないこと)
+got=$(jq -r 'select(.id == "repo-uninitialized") | .id' <<<"$(uninit_out git commit -q --allow-empty -m init)")
+if [ -z "$got" ]; then
+  echo "  [ok]   コミットが 1 件あれば打ち切らない"
+else
+  echo "  [FAIL] コミットがあるのに打ち切った"
   failures=$((failures + 1))
 fi
 
