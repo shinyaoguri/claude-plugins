@@ -40,6 +40,8 @@ allowed-tools: "Bash(jq:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-git
 
    逸脱が残っていれば項目を示し、対処は /repo-audit へ渡す。**生成直後に本監査 (repo-audit) は回さない** — 標準どおりに作った直後で逸脱はほぼ無く、反証まで通す本監査を通すコストに見合わない
 
+   **`BLOCK` 行 (前提未達で未判定) が出たら、見送った項目と一緒に持ち越し先へ書く**。手順 2 で生成を見送った項目 (技術スタック未確定で CI を作らない等) があると、それに依存する `level: required` の項目が判定されないまま残る。前提を埋めたときに拾い直す契機はこの持ち越しにしか無い (CI を後から足しても、誰も `gh-required-checks` を見に行かない — issue #97 の実害)。持ち越しには**前提の id と、前提を埋めた後に /repo-audit を回すこと**まで書く
+
 ## 詳細の在処
 
 - チェックリストの正本と各項目の生成方針 (`fix`): `~/.claude/repo-standards.json` (実体は shinyaoguri/setup の claude/repo-standards.json)

@@ -78,6 +78,42 @@ cat > "$manifest" <<'EOF'
       "check": { "type": "builtin", "name": "worktrees_clean" },
       "why": "テスト用",
       "fix": "テスト用"
+    },
+    {
+      "id": "gitignore-covers-env",
+      "layer": "repo",
+      "level": "recommended",
+      "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "gitignore_covers_env" },
+      "why": "テスト用",
+      "fix": "テスト用"
+    },
+    {
+      "id": "pr-title-lint",
+      "layer": "repo",
+      "level": "recommended",
+      "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "pr_title_lint_configured" },
+      "why": "テスト用",
+      "fix": "テスト用"
+    },
+    {
+      "id": "scheduled-freshness",
+      "layer": "repo",
+      "level": "recommended",
+      "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "scheduled_workflow_exists" },
+      "why": "テスト用",
+      "fix": "テスト用"
+    },
+    {
+      "id": "changelog-exists",
+      "layer": "repo",
+      "level": "recommended",
+      "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "changelog_exists" },
+      "why": "テスト用",
+      "fix": "テスト用"
     }
   ]
 }
@@ -210,6 +246,64 @@ if [ -n "$got" ]; then
   echo "  [ok]   集約経由の ok は根拠を detail に残す → $got"
 else
   echo "  [FAIL] 集約経由の ok の detail → 期待 非空 / 実際 空"
+  failures=$((failures + 1))
+fi
+
+echo
+echo "前提未達の保留 (blocked) と恒久的な対象外 (skip) の切り分け:"
+
+# 前提が「別の標準項目」なら blocked。前提が埋まれば判定対象に戻るので、skip に落とすと
+# 拾い直す契機が消える (#97 / ADR 0019)。前提がリポの性質なら skip のまま
+
+check_id=tests-run-in-ci
+assert blocked "テストが無い → test-dir-exists 待ち" \
+  bash -c 'mkdir -p .github/workflows &&
+           printf "jobs:\n  t:\n    steps:\n      - run: echo build\n" > .github/workflows/ci.yml &&
+           git add -A'
+assert blocked "CI workflow が無い → ci-workflow-exists 待ち" \
+  bash -c 'mkdir -p scripts && touch scripts/test-foo.sh && git add -A'
+
+check_id=pr-title-lint
+assert blocked "CI workflow が無ければ PR タイトル lint は判定できない" true
+
+check_id=scheduled-freshness
+assert blocked "CI workflow が無ければ定期実行は判定できない" true
+
+check_id=gitignore-covers-env
+assert blocked ".gitignore が無い → gitignore-exists 待ち" true
+
+# 境界: 前提がリポの性質 (タグを打つかどうか) の項目は blocked にしない。前提が埋まる契機が
+# 標準の側に無く、blocked にすると「いつか判定される」保留が永久に溜まる
+check_id=changelog-exists
+assert skip "タグが無いリポの CHANGELOG は skip のまま" true
+
+# 保留の行は前提の id を detail に持ち、fix は持たない (当てる先は前提側の項目にある)
+blocked_dir="$tmp/blocked-detail"
+mkdir -p "$blocked_dir"
+( cd "$blocked_dir" && git init -q -b main && git commit -q --allow-empty -m init ) >/dev/null 2>&1
+out=$( cd "$blocked_dir" && REPO_STANDARDS_JSON="$manifest" bash "$target" )
+got=$(jq -r 'select(.id == "gitignore-covers-env") | .detail' <<<"$out")
+if grep -q 'gitignore-exists 待ち' <<<"$got"; then
+  echo "  [ok]   blocked の detail に前提の id が入る → $got"
+else
+  echo "  [FAIL] blocked の detail → 期待 gitignore-exists 待ち を含む / 実際 $got"
+  failures=$((failures + 1))
+fi
+got=$(jq -r 'select(.id == "gitignore-covers-env") | .fix // ""' <<<"$out")
+if [ -z "$got" ]; then
+  echo "  [ok]   blocked に fix は付かない"
+else
+  echo "  [FAIL] blocked に fix が付いている → $got"
+  failures=$((failures + 1))
+fi
+
+# 出力契約: status は語彙の内側だけ (blocked を足したので契約側も追随する)
+bad=$(jq -r 'select(.id != "_meta") | .status' <<<"$out" \
+  | grep -cvE '^(ok|ng|warn|blocked|skip|manual)$')
+if [ "$bad" = "0" ]; then
+  echo "  [ok]   契約外の status が無い"
+else
+  echo "  [FAIL] 契約外の status が $bad 件"
   failures=$((failures + 1))
 fi
 

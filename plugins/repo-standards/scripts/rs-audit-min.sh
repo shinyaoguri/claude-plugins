@@ -61,6 +61,9 @@ printf '%s\n' "$raw" | jq -sr --argjson w "$width" --argjson save "$save" --argj
   | ((($meta | map(select(.layer == "github")))[0]) // {}) as $mg
   | (reduce $rows[] as $r ({}; .[$r.status] = ((.[$r.status] // 0) + 1))) as $c
   | (($c.ng // 0) + ($c.warn // 0)) as $bad
+  # 前提未達で保留 (blocked) のうち level: required のもの。恒久的に対象外の skip と違い
+  # 前提が埋まれば判定対象に戻るので、黙って落とすと required の取りこぼしが検知されない
+  | ($rows | map(select(.status == "blocked" and .level == "required"))) as $blocked_req
   | ($rows | map(select(.id == "standards-manifest-missing")) | length > 0) as $nomanifest
   | ($rows | map(select(.id == "repo-uninitialized")) | length > 0) as $uninit
   # GitHub 上のリポを特定できたときだけ repo= を名乗る。特定できないときに
@@ -78,7 +81,16 @@ printf '%s\n' "$raw" | jq -sr --argjson w "$width" --argjson save "$save" --argj
                 else "  " + ((.detail // "") | gsub("\\s+"; " ")
                              | if length > $w then .[0:$w] + "…" else . end)
                 end)))
-    + [ "ok=\($c.ok // 0) ng=\($c.ng // 0) warn=\($c.warn // 0) skip=\($c.skip // 0) manual=\($c.manual // 0)" ]
+    # required の保留だけ行として出す (recommended まで出すとこのスクリプトの存在理由である
+    # トークン最小化に反する。件数は下の集計行で読める)
+    + ($blocked_req
+       | sort_by(.id)
+       | map("BLOCK " + .id
+             + (if $w == 0 then ""
+                else "  " + ((.detail // "") | gsub("\\s+"; " ")
+                             | if length > $w then .[0:$w] + "…" else . end)
+                end)))
+    + [ "ok=\($c.ok // 0) ng=\($c.ng // 0) warn=\($c.warn // 0) blocked=\($c.blocked // 0) skip=\($c.skip // 0) manual=\($c.manual // 0)" ]
     + [ "次: "
         + (if $nomanifest then "正本 repo-standards.json が無い — setup リポのセットアップが先"
            # 監査でなく生成の段階。修正フローへ送っても、リポの実体を材料にする
@@ -90,7 +102,12 @@ printf '%s\n' "$raw" | jq -sr --argjson w "$width" --argjson save "$save" --argj
            else "詳細と修正は /repo-audit → /repo-audit-fix" end)
         # 「未実施」とは書かない。このスクリプトが判定しないのは常に真だが、呼び出し側
         # (repo-audit-min スキル) は続けて rs-evidence.sh + 判定係で埋めるため
-        + (if ($c.manual // 0) > 0 then " (LLM 判定 \($c.manual) 件はこのスクリプトの対象外)" else "" end) ]
+        + (if ($c.manual // 0) > 0 then " (LLM 判定 \($c.manual) 件はこのスクリプトの対象外)" else "" end)
+        # 保留は「逸脱なし」ではなく「まだ判定できていない」。前提の id は BLOCK 行の
+        # detail に入っているので、ここでは持ち越しが要ることだけ言う
+        + (if ($blocked_req | length) > 0 then
+             " / BLOCK \($blocked_req | length) 件は前提未達で未判定 — 前提を埋めるまで残タスクとして持ち越す"
+           else "" end) ]
   | .[]
 '
 

@@ -9,7 +9,15 @@
 # 出力契約 (rs-audit-min.sh を除く全 rs-*.sh 共通): JSON Lines。1 チェック = 1 行
 #   {"id","layer","level","status","detail","fix"?}
 #   status: ok / ng (required 違反) / warn (recommended 違反・rejected 検出)
-#         / skip (対象外・前提不足。理由を detail に) / manual (LLM 判定へ委譲)
+#         / blocked (別の標準項目が未達で今は判定できない。理由と前提の id を detail に)
+#         / skip (恒久的に対象外。理由を detail に) / manual (LLM 判定へ委譲)
+#
+# blocked と skip を分けるのは、前者が「前提が解消されれば判定対象に戻る」一時的な状態
+# だから (ADR 0019)。同じ skip に潰すと、前提を先送りしたリポで required 項目が報告からも
+# 持ち越しからも黙って消える (claude-plugins issue #97 の実害)。判断の目安:
+#   blocked … 前提が別の標準項目 (CI workflow が無いので required checks を判定できない 等)
+#   skip    … 前提がリポの性質・環境 (タグが無い / private 限定 / gh 未認証 / 種別が違う)
+# blocked に fix は付けない。当てる先はこの項目でなく前提側の項目にある。
 # スクリプトはレポートツールでありゲートではない。チェック結果がどうであれ exit 0 を保ち、
 # スクリプト自体の異常 (jq 不在など) のみ非 0 で落ちる。
 #

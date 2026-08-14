@@ -47,8 +47,8 @@ fi
 
 # ---- builtin 検査 (正本の check.name から呼ばれる) ----
 
-builtin_gitignore_covers_env() { # ok / fail / skip:<理由>
-  [ -f .gitignore ] || { echo "skip:.gitignore が無いため判定不能"; return; }
+builtin_gitignore_covers_env() { # ok / fail / skip:<理由> / blocked:<理由>
+  [ -f .gitignore ] || { echo "blocked:.gitignore がまだ無い (gitignore-exists 待ち)"; return; }
   grep -qE '(^|[/*])\.env' .gitignore && echo ok || echo fail
 }
 
@@ -159,10 +159,11 @@ $val"
 # テストディレクトリがあっても CI で呼ばれていなければ「置いてあるだけ」になる
 # (setup リポ issue #36 の実例: 手元でしか流さず 1 件赤いまま数日放置された)
 builtin_tests_run_in_ci() {
-  [ "$(builtin_test_dir_exists)" = ok ] || { echo "skip:テストディレクトリが無いため対象外"; return; }
+  [ "$(builtin_test_dir_exists)" = ok ] \
+    || { echo "blocked:テストがまだ無い (test-dir-exists 待ち)"; return; }
   local files
   files=$(workflow_files)
-  [ -n "$files" ] || { echo "skip:CI workflow が無いため対象外"; return; }
+  [ -n "$files" ] || { echo "blocked:CI workflow がまだ無い (ci-workflow-exists 待ち)"; return; }
   if grep -qhE "$TEST_CMD_RE" $files; then
     echo ok
     return
@@ -185,7 +186,7 @@ builtin_tests_run_in_ci() {
 builtin_pr_title_lint_configured() {
   local files
   files=$(workflow_files)
-  [ -n "$files" ] || { echo "skip:CI workflow が無いため対象外"; return; }
+  [ -n "$files" ] || { echo "blocked:CI workflow がまだ無い (ci-workflow-exists 待ち)"; return; }
   if grep -qhiE '(pr-title|pr_title|PR_TITLE|conventional|commitlint|semantic-pull-request)' $files; then
     echo ok
   else
@@ -197,7 +198,7 @@ builtin_pr_title_lint_configured() {
 builtin_scheduled_workflow_exists() {
   local files
   files=$(workflow_files)
-  [ -n "$files" ] || { echo "skip:CI workflow が無いため対象外"; return; }
+  [ -n "$files" ] || { echo "blocked:CI workflow がまだ無い (ci-workflow-exists 待ち)"; return; }
   grep -qhE '^\s*schedule:' $files && echo ok || echo fail
 }
 
@@ -341,6 +342,9 @@ while IFS= read -r item; do
         # ok:<詳細> は適合と判定した根拠が自明でない場合 (どう回り道して見つけたか)
         ok:*) emit "$id" "$layer" "$level" ok "${result#ok:}" ;;
         skip:*) emit "$id" "$layer" "$level" skip "${result#skip:}" ;;
+        # blocked:<理由> は別の標準項目が未達で判定できない場合 (前提が解消されれば判定対象に
+        # 戻る)。fix は渡さない — 当てる先はこの項目でなく前提側の項目にある
+        blocked:*) emit "$id" "$layer" "$level" blocked "${result#blocked:}" ;;
         # fail:<詳細> は検査が具体的な違反箇所を掴んでいる場合 (どのブランチ・どのファイルか)
         fail:*) emit "$id" "$layer" "$level" "$(fail_status "$level")" "${result#fail:} — $why" "$fix" "$fix_kind" ;;
         *) emit "$id" "$layer" "$level" "$(fail_status "$level")" "$why" "$fix" "$fix_kind" ;;

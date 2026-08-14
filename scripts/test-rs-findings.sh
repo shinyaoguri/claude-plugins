@@ -167,6 +167,42 @@ got=$( cd "$d" && bash "$target" summary | jq -r .hint )
 check "findings が空 (先に監査を実行する)" "$got" "findings が無くても落ちない"
 
 echo
+echo "blocked: 前提未達で保留した項目 (#97 / ADR 0019)"
+
+# 直す対象は前提側の項目にあるので未決には置かない。ただし記録からは消さず、
+# level: required の保留は前提を埋めたときに拾い直せるよう必ず見えるところに数える
+d=$(newrepo)
+got=$( cd "$d" && { line a blocked required; line b blocked; } | bash "$target" save >/dev/null
+       bash "$target" summary | jq -r '[.blocked, .blocked_required, .pending] | join(",")' )
+check "2,1,0" "$got" "保留は数えるが未決にはしない"
+
+got=$( cd "$d" && bash "$target" summary | jq -r .hint )
+case "$got" in
+  *"前提未達で保留の required 1 件 (a)"*) echo "  [ok]   required の保留を id ごと hint に出す → $got" ;;
+  *) echo "  [FAIL] required の保留が hint に出ない → $got"; failures=$((failures + 1)) ;;
+esac
+
+# 保留に fix を当てる先は無いので、承認一覧 (--decision pending) に並ばない
+got=$( cd "$d" && bash "$target" list --decision pending | jq -r .id | tr '\n' ' ' )
+check "" "$got" "保留は承認一覧に並ばない"
+
+# 拾い直しの本体: 前提が埋まって判定できるようになれば、通常の未決として修正フローに戻る。
+# ここが効かないと「CI を後から足しても required を誰も見に行かない」状態が続く
+d=$(newrepo)
+got=$( cd "$d" && line a blocked required | bash "$target" save >/dev/null
+       line a ng required | bash "$target" save >/dev/null
+       bash "$target" list | jq -r '[.status, (.decision // "-")] | join(":")' )
+check "ng:pending" "$got" "前提が埋まって ng へ動けば未決に戻る"
+
+# 逆向き (判定できていたものが前提未達に戻る) でも承認が残らない
+d=$(newrepo)
+got=$( cd "$d" && line a ng required | bash "$target" save >/dev/null
+       bash "$target" set --decision approved a >/dev/null
+       line a blocked required | bash "$target" save >/dev/null
+       bash "$target" list | jq -r '.decision // "-"' )
+check "-" "$got" "保留に戻れば古い承認は消える"
+
+echo
 echo "前提不足時の報告 (出力契約の範囲内で)"
 
 # git リポ外: 保存は諦めるが監査出力は素通しし、契約内の status で報告する

@@ -81,8 +81,10 @@ builtin_main_pr_required() {
 
 builtin_required_checks_configured() {
   # .yml / .yaml 両対応 (片方だけの glob では取りこぼす。rs-audit-repo.sh の workflow_files と同じ理由)
+  # CI が無いのは「恒久的に対象外」ではなく前提未達 (ci-workflow-exists 待ち)。skip に落とすと
+  # CI を後から足したときに required 項目を拾い直す契機が無くなる (issue #97 / ADR 0019)
   { compgen -G ".github/workflows/*.yml" || compgen -G ".github/workflows/*.yaml"; } >/dev/null \
-    || { echo "skip:CI workflow が無いため対象外"; return; }
+    || { echo "blocked:CI workflow がまだ無い (ci-workflow-exists 待ち)"; return; }
   if has_rule required_status_checks; then echo ok; return; fi
   if [ -n "$classic_json" ] && jq -e '.required_status_checks' >/dev/null 2>&1 <<<"$classic_json"; then
     echo ok; return
@@ -193,6 +195,9 @@ while IFS= read -r item; do
       case "$result" in
         ok) emit "$id" github "$level" ok "" ;;
         skip:*) emit "$id" github "$level" skip "${result#skip:}" ;;
+        # blocked:<理由> は別の標準項目が未達で判定できない場合。fix は渡さない
+        # (当てる先は前提側の項目にある)
+        blocked:*) emit "$id" github "$level" blocked "${result#blocked:}" ;;
         # fail:<詳細> は検査が具体的な違反箇所を掴んでいる場合
         fail:*) emit "$id" github "$level" "$(fail_status "$level")" "${result#fail:} — $why" "$fix" "$fix_kind" ;;
         *) emit "$id" github "$level" "$(fail_status "$level")" "$why" "$fix" "$fix_kind" ;;
