@@ -296,6 +296,11 @@ fi
 # upstream:track == [gone] だけで、これは remote-tracking の prune が前提になる。
 # どちらもリポでなくマシン共通の git 設定なので env 層で見る
 # (正本: setup リポの tasks/git.yml。経緯: claude-plugins#67)
+#
+# [gone] のうちマージ済み PR の head と tip が一致するものは SessionStart hook
+# (stale-branch-sweep.sh) が自動で消す。fetch.prune が効いていないとその判定材料が
+# 揃わず、残りの棚卸しにはエイリアスが要る — どちらも「自動で消える範囲」を
+# 説明できないと緑が誤読される (経緯: claude-plugins#99)
 git_fix="setup リポで ansible-playbook playbook_sillicon_mac.yml --tags git を実行する"
 prune=$(git config --global --get fetch.prune 2>/dev/null) || prune=""
 if [ "$prune" = "true" ]; then
@@ -311,10 +316,11 @@ for a in gone gone-clean; do
   git config --global --get "alias.$a" >/dev/null 2>&1 || missing="$missing $a"
 done
 if [ -z "$missing" ]; then
-  emit env-git-gone-alias env recommended ok "alias.gone / alias.gone-clean が設定済み (役目を終えたローカルブランチの一覧と削除)"
+  emit env-git-gone-alias env recommended ok \
+    "alias.gone / alias.gone-clean が設定済み (SessionStart hook が自動で消すのは「マージ済み PR の head と tip が一致する [gone]」だけ。close された PR や未 push のコミットが載っているものは残るので、棚卸しはこのエイリアスで手動)"
 else
   emit env-git-gone-alias env recommended warn \
-    "git のエイリアスが未設定 ($missing) — squash merge 後に残るローカルブランチを棚卸しする手立てが無い" \
+    "git のエイリアスが未設定 ($missing) — squash merge 後に残るローカルブランチのうち、SessionStart hook が自動で消せない分 (close された PR・未 push のコミットが載っているもの) を棚卸しする手立てが無い" \
     "$git_fix"
 fi
 

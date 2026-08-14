@@ -21,7 +21,7 @@ allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh:*), Bas
    - **自動モードの守り** (`env-automode-*` / `env-ask-checkpoints`) はフックの欠落と同列で最優先。承認プロンプトを消すほど、危険な操作を止める役目は分類器へ寄る。とくに `env-automode-defaults` の ng は **`"$defaults"` を書き忘れた配列が組み込みルール (force push・`curl | bash`・データ持ち出し・auto-mode bypass) を丸ごと捨てている**状態で、緩めた自覚が残らない。修正先は必ず setup リポの claude/settings.json (`~/.claude/settings.json` は symlink)。適用後に `claude auto-mode config` で展開後の実効ルールを確認し、自作ルールを足したなら `claude auto-mode critique` にレビューさせる。**プロジェクトの .claude/settings.json やプラグインからは供給できない** (リポが自分でルールを緩められないための公式仕様) ので、「対象リポに置けばよいのでは」と提案しない
    - **フックの欠落** (`env-hook-missing-*` / `env-hook-not-executable-*`) は最優先で扱う。settings.json に登録されているのに実体が無いフックは**無音で効かない**ため、ガードがある前提の作業が無防備なまま進む。playbook を再実行しても直らないときは setup リポの tasks/claude.yml (`claude_config_files`) に対象が入っているかを確認する (`chmod +x` や手作業の `ln -s` で塞がない — 次の playbook 実行で元に戻る)
    3. **実体コピーの削除** (`env-skill-duplicate-*` など) — rm コマンドは提示のみ。実行はユーザーに委ねる
-   4. **ローカルブランチの掃除** — git 設定を入れたうえで、実際の削除は `git gone` で一覧を提示してから `git gone-clean` を案内する。**削除コマンドの実行はユーザーに委ねる** (消えるのはローカル参照だけで内容は main と `refs/pull/<N>/head` に残るが、削除系は提示に留める)。`git gone` は upstream を持つブランチしか拾わないので、push されなかったローカル専用ブランチ (`worktree-agent-*` 等) は `git stale` / `git stale-clean` の側で棚卸しする — こちらは「既定ブランチの祖先」= 内容が完全に取り込み済みのものだけが対象で、SessionStart hook (`stale-branch-sweep.sh`) が同じ判定で自動削除するため、通常は残っていない
+   4. **ローカルブランチの掃除** — SessionStart hook (`stale-branch-sweep.sh`) が、**消しても情報が失われないと機械的に証明できるものだけ**を自動削除している (ADR 0018): ①既定ブランチの祖先 (`git stale` と同じ判定。push されなかった `worktree-agent-*` 等) と、②`[gone]` かつマージ済み PR の head と tip が一致するもの (squash マージ済み)。**残る `[gone]` は「証明できなかったもの」** — close された PR のブランチ、未 push のコミットが載っているもの、gh が引けなかったもの。これらは `git gone` で一覧を提示してから `git gone-clean` を案内し、**削除コマンドの実行はユーザーに委ねる** (消えるのはローカル参照だけだが、内容が残っている保証が無いので提示に留める)
    5. **gh トークンの権限** (`env-gh-token-admin`) — **権限の剥奪 (fine-grained PAT への切り替え) は提案しない**。実効性が「マシン上に admin トークンを残さない」に依存して崩れやすく、コストだけが残るため不採用 (setup#42)。warn は事実の可視化として扱い、bypass_actors を空にした ruleset と設定変更の検知で担保する方針であることを伝える
 4. 修正後に同じスクリプトを再実行し、before / after を提示する
 
@@ -31,9 +31,9 @@ allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh:*), Bas
 - スキル置き場のルール (汎用 / リポ固有 / 第三者配布の切り分け): setup リポの claude/CLAUDE.md (グローバル CLAUDE.md) のスキル節
 - git のグローバル設定 (fetch.prune・gone / gone-clean / stale / stale-clean エイリアスの実体): setup リポの tasks/git.yml
 - 自動モードの設定 (`permissions.defaultMode` / `permissions.ask` / `autoMode.{environment,allow,soft_deny,hard_deny}`) の正本: setup リポの claude/settings.json。組み込みルールの実物は `claude auto-mode defaults`
-- 取り込み済みローカルブランチの自動掃除: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/stale-branch-sweep.sh` (SessionStart)。止めたいときは `RS_BRANCH_SWEEP=0`
+- 役目を終えたローカルブランチの自動掃除: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/stale-branch-sweep.sh` (SessionStart)。止めたいときは `RS_BRANCH_SWEEP=0`、`[gone]` 側 (gh への照会) だけ止めるなら `RS_BRANCH_SWEEP_GONE=0`、1 セッションの照会本数は `RS_BRANCH_SWEEP_GONE_MAX` (既定 10)
 - 合意の無いまま実装が広がるのを止めるプランゲート: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/plan-gate.sh` (PreToolUse)。閾値は `RS_PLAN_GATE_THRESHOLD`、止めたいときは `RS_PLAN_GATE=0`
 - 検査項目の実装: `${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh` (すべてビルトイン。正本 JSON に依存しない)
-- 削除系 (`git gone-clean`・実体コピーの `rm`) を allowed-tools に載せていないのは意図的。提示のみに留める方針を許可の側でも担保する
+- 削除系 (`git gone-clean`・実体コピーの `rm`) を allowed-tools に載せていないのは意図的。**証明できない削除**は提示のみに留める方針を許可の側でも担保する (証明できるものは hook 側で既に消えている)
 
 このスキル自体の不具合・使いにくさに気付いたら、report-issue スキルで shinyaoguri/claude-plugins へ気軽に起票する。
