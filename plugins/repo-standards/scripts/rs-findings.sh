@@ -33,6 +33,11 @@
 #             / applied (適用済み) / deferred (今回は見送り。Issue へ引き継ぐ)
 #   note      decision の理由
 #
+# status: blocked (別の標準項目が未達で判定できない) の行は未決に置かない。当てる fix が
+# この項目に無いためで、直す対象は前提側の項目にある。ただし記録からは消さず summary の
+# blocked / blocked_required に数える — 前提が解消したときに拾い直す契機がそこにしか無い
+# (ADR 0019)。前提が埋まって status が ng / warn へ動けば、save が未決に戻す。
+#
 # intent は verdict を上書きしない。標準に合っていないという事実 (ng / warn) と、
 # それがこのリポでは正しい逸脱かもしれないという文脈は別物で、後者で前者を消すと
 # 「標準から外れている」こと自体が見えなくなる。intent は repo-audit-fix が
@@ -140,7 +145,9 @@ cmd_save() {
       elif .status == "ng" or .status == "warn" then
         (if has("decision") then . else . + {decision: "pending"} end)
       # 標準に適合した項目に衝突判断が残っていると、次の逸脱時に古い理由が付いて回る。
-      # manual 行の verdict が ok / skip へ変わる経路は cmd_set 側で落としている
+      # manual 行の verdict が ok / skip へ変わる経路は cmd_set 側で落としている。
+      # blocked (前提未達) もここ — 承認する対象が無いので未決に置かない。前提が埋まって
+      # ng / warn へ動いた回で、上の分岐が未決に戻す
       else del(.decision, .note, .verdict, .evidence, .head, .verified, .intent, .intent_note) end
   ' > "$file.tmp" && mv "$file.tmp" "$file"
 
@@ -379,9 +386,15 @@ cmd_summary() {
     # 適用したのに status が変わらない項目。再監査で status が動けば decision は
     # 引き継がれず消えるので、ここに残るのは「直したつもりで直っていない」だけ
     | (map(select(.decision == "applied" and (._eff == "ng" or ._eff == "warn"))) | length) as $unresolved
+    # 前提未達で保留している項目。直す対象は前提側なので未決には数えないが、level: required の
+    # 保留は「前提を先送りしたぶん required が判定されていない」ことなので必ず見えるようにする
+    | (map(select(._eff == "blocked")) | length) as $blocked
+    | (map(select(._eff == "blocked" and .level == "required")) | length) as $blocked_required
     | {id: "_next",
        ng:       (map(select(._eff == "ng"))   | length),
        warn:     (map(select(._eff == "warn")) | length),
+       blocked:  $blocked,
+       blocked_required: $blocked_required,
        manual_unjudged: $mp,
        provisional: $provisional,
        overridden: $overridden,
@@ -410,7 +423,11 @@ cmd_summary() {
            else "未決の指摘なし" end)
           # 暫定判定が残っていることは、どの段階にいても伝える (安い層の判定で
           # 修正まで進める設計なので、判定の質が違うことが見えないと混ざる)
-          + (if $provisional > 0 then " / 暫定判定 \($provisional) 件 (min 由来。確度が要るなら repo-audit で判定し直す)" else "" end))}
+          + (if $provisional > 0 then " / 暫定判定 \($provisional) 件 (min 由来。確度が要るなら repo-audit で判定し直す)" else "" end)
+          # required の保留も同じ枠。次アクションの本線は奪わないが、黙って消させない
+          + (if $blocked_required > 0 then
+               " / 前提未達で保留の required \($blocked_required) 件 (\(map(select(._eff == "blocked" and .level == "required")) | map(.id) | join(", "))) — 前提を埋めたら再監査する"
+             else "" end))}
   ' "$file"
 }
 

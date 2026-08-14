@@ -86,7 +86,7 @@ grep -q 'LLM 判定 1 件' <<<"$out" && ok "LLM 判定の件数を次アクシ�
 echo
 echo "集計行:"
 
-want="ok=1 ng=1 warn=1 skip=1 manual=1"
+want="ok=1 ng=1 warn=1 blocked=0 skip=1 manual=1"
 got=$(grep -E '^ok=' <<<"$out")
 [ "$got" = "$want" ] && ok "集計行 → $got" || fail "集計行 → 期待 [$want] / 実際 [$got]"
 
@@ -120,11 +120,54 @@ echo
 echo "--no-github (層② を丸ごと省く):"
 
 with=$(run | grep -E '^ok=')
-[ "$with" = "ok=1 ng=1 warn=1 skip=2 manual=1" ] \
+[ "$with" = "ok=1 ng=1 warn=1 blocked=0 skip=2 manual=1" ] \
   && ok "既定では layer:github の項目も数える (origin 無しなので skip) → $with" \
-  || fail "既定の集計 → 期待 [ok=1 ng=1 warn=1 skip=2 manual=1] / 実際 [$with]"
+  || fail "既定の集計 → 期待 [ok=1 ng=1 warn=1 blocked=0 skip=2 manual=1] / 実際 [$with]"
 [ "$got" = "$want" ] && ok "--no-github では層② が集計から消える" \
   || fail "--no-github でも層② が残っている"
+
+echo
+echo "前提未達の保留 (required だけ行に出す):"
+
+# 保留は「逸脱なし」ではなく「まだ判定できていない」。恒久的な対象外 (skip) と同じ扱いで
+# 落とすと、前提を先送りしたリポで required の取りこぼしが誰にも見えない (#97 / ADR 0019)。
+# 一方で recommended まで行にすると、このスクリプトの存在理由 (トークン最小化) が消える
+manifest_b="$tmp/standards-blocked.json"
+cat > "$manifest_b" <<'EOF'
+{
+  "version": 1,
+  "kinds": [{ "id": "generic", "marker": null }],
+  "items": [
+    { "id": "blocked-required", "layer": "repo", "level": "required", "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "gitignore_covers_env" },
+      "why": "テスト用", "fix": "テスト用" },
+    { "id": "blocked-recommended", "layer": "repo", "level": "recommended", "applies_to": ["all"],
+      "check": { "type": "builtin", "name": "scheduled_workflow_exists" },
+      "why": "テスト用", "fix": "テスト用" }
+  ]
+}
+EOF
+
+# .gitignore も CI workflow も無いリポ (bootstrap 直後に相当) では両方が保留になる
+bout=$( cd "$dir" && REPO_STANDARDS_JSON="$manifest_b" bash "$target" --no-github )
+
+grep -qE '^BLOCK blocked-required' <<<"$bout" \
+  && ok "required の保留は BLOCK 行として出る" \
+  || fail "required の保留が行に出ない: $bout"
+grep -q 'gitignore-exists 待ち' <<<"$bout" \
+  && ok "BLOCK 行に前提の id が読める" || fail "BLOCK 行に前提の id が無い: $bout"
+grep -q 'blocked-recommended' <<<"$bout" \
+  && fail "recommended の保留まで行に出している (トークンの無駄)" \
+  || ok "recommended の保留は行に出さず件数だけ数える"
+
+got=$(grep -E '^ok=' <<<"$bout")
+[ "$got" = "ok=0 ng=0 warn=0 blocked=2 skip=0 manual=0" ] \
+  && ok "集計行に blocked を数える → $got" \
+  || fail "集計行 → 期待 [ok=0 ng=0 warn=0 blocked=2 skip=0 manual=0] / 実際 [$got]"
+
+# 逸脱 0 件でも「逸脱なし」で終わらせない (前提を埋めるまで持ち越す先がある)
+grep -q '持ち越す' <<<"$bout" && ok "次の一手に持ち越しを促す" \
+  || fail "保留があるのに持ち越しを促していない: $(grep '^次: ' <<<"$bout")"
 
 echo
 echo "前提不足時も報告で止まる (ゲートではない):"

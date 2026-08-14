@@ -125,11 +125,19 @@ touch "$dir/.github/workflows/ci.yaml"
 assert_eq ng "$(run "$dir" env | jq -r 'select(.id == "gh-required-checks") | .status')" \
   ".yaml のみの workflow でも判定する"
 
-# workflow が無ければ対象外
+# workflow が無いのは「対象外」ではなく前提未達 (ci-workflow-exists 待ち)。skip に落とすと
+# CI を後から足したときに required 項目を拾い直す契機が消える (#97 の実害)
 dir="$tmp/case-none"
 git init -q -b main "$dir"
-assert_eq skip "$(run "$dir" env | jq -r 'select(.id == "gh-required-checks") | .status')" \
-  "workflow が無ければ skip"
+out=$(run "$dir" env)
+assert_eq blocked "$(jq -r 'select(.id == "gh-required-checks") | .status' <<<"$out")" \
+  "workflow が無ければ blocked (skip ではない)"
+assert_eq ci-workflow-exists \
+  "$(jq -r 'select(.id == "gh-required-checks") | .detail | capture("(?<p>[a-z-]+) 待ち") | .p' <<<"$out")" \
+  "blocked の detail に前提の id が入る"
+# 当てる先は前提側の項目にあるので、保留の行に fix は載せない
+assert_eq "" "$(jq -r 'select(.id == "gh-required-checks") | .fix // ""' <<<"$out")" \
+  "blocked に fix は付かない"
 
 echo
 echo "classic branch protection へのフォールバック (ruleset 未使用のリポ):"
@@ -246,11 +254,11 @@ assert_eq github "$(jq -r 'select(.id == "_meta") | .layer' <<<"$out")" \
   "未認証でも _meta 行がある"
 
 echo
-echo "出力契約 (status は ok/ng/warn/skip/manual のみ):"
+echo "出力契約 (status は ok/ng/warn/blocked/skip/manual のみ):"
 dir="$tmp/case-contract"
 git init -q -b main "$dir"
 bad=$(run "$dir" env | jq -r 'select(.id != "_meta") | .status' \
-  | grep -cvE '^(ok|ng|warn|skip|manual)$' || true)
+  | grep -cvE '^(ok|ng|warn|blocked|skip|manual)$' || true)
 assert_eq 0 "$bad" "契約外の status が無い"
 
 echo
