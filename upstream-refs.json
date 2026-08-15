@@ -54,9 +54,5 @@
     "tasks/claude.yml",
     "tasks/git.yml",
     "playbook_sillicon_mac.yml"
-  ],
-  "shinyaoguri/claude-plugins": [
-    ".github/ISSUE_TEMPLATE/improvement.yml",
-    ".github/ISSUE_TEMPLATE/drift-report.yml"
   ]
 }
