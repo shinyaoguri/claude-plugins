@@ -336,9 +336,13 @@ assert ok ".env.example / .sample / .template は除外" \
 assert ok "id_rsa.pub は拾わない" \
   bash -c 'mkdir -p keys && echo x > keys/id_rsa.pub && git add -A'
 
-# 境界値: 追跡されていなければ検出しない (ローカルに置くのは正しい運用)
+# 境界値: 追跡されていなければ検出しない (ローカルに置くのは正しい運用)。
+# 追跡ファイルが 1 つでもある状態で見る — 0 件だと下の skip と区別がつかない
 assert ok "追跡していない .env は対象外" \
-  bash -c 'echo "K=v" > .env'
+  bash -c 'echo "K=v" > .env && echo hi > README.md && git add README.md'
+
+# 対象ゼロ: 追跡ファイルが 1 件も無いリポは「検査して問題が無かった」ではない
+assert skip "追跡ファイルが 0 件なら検査対象が無い" true
 
 echo
 echo "builtin_no_stale_branches (30 日境界):"
@@ -353,8 +357,9 @@ mk_remote_branch() { # <name> <何日前>
 }
 export -f mk_remote_branch
 
-# 正常系: リモートブランチが無い
-assert ok "リモートブランチが無い" true
+# 対象ゼロ: リモート追跡 ref が 1 本も無い (remote 未設定か未 push)。
+# 「長命ブランチ以外に残骸が無い」とは別の状態なので ok に丸めない
+assert skip "リモート追跡ブランチが無い" true
 
 # 境界値: 29 日前は「作業中」の範囲
 assert ok "29 日前のブランチは残骸としない" \
@@ -364,7 +369,8 @@ assert ok "29 日前のブランチは残骸としない" \
 assert warn "31 日前のブランチは残骸" \
   bash -c 'mk_remote_branch feature-old 31'
 
-# 境界値: main / master / HEAD は長命ブランチなので古くても対象外
+# 境界値: main / master / HEAD は長命ブランチなので古くても対象外。
+# ref は存在するので「検査対象ゼロ (skip)」ではなく、検査したうえでの ok
 assert ok "origin/main は古くても対象外" \
   bash -c 'mk_remote_branch main 400'
 
@@ -375,10 +381,10 @@ echo
 echo "builtin_worktrees_clean (orphan 判定):"
 check_id=worktrees-clean
 
-# 正常系: worktree を使っていない
-assert ok ".claude/worktrees が無い" true
+# 対象ゼロ: linked worktree もディレクトリも無い = 掃除できる残骸が存在しない
+assert skip ".claude/worktrees が無い" true
 
-# 正常系: ディレクトリはあるが中身が無い
+# 正常系: ディレクトリはあるが中身が無い (worktree を使う運用で、残骸ゼロ)
 assert ok ".claude/worktrees が空" mkdir -p .claude/worktrees
 
 # 失敗系: git に登録されていないディレクトリが残っている (worktree remove を忘れた状態)
@@ -448,6 +454,94 @@ for ng in gone-dirty gone-env alive; do
 done
 
 check_id=adr-exists
+
+echo
+echo "可視性を判定できない理由の切り分け (受け手が疑う先を間違えないこと):"
+
+# when.visibility を持つ項目だけの manifest。gh はスタブに差し替えるので実 GitHub にも
+# ネットワークにも触らない
+vis_manifest="$tmp/vis.json"
+cat > "$vis_manifest" <<'EOF'
+{
+  "version": 1,
+  "kinds": [{ "id": "generic", "marker": null }],
+  "items": [
+    { "id": "license-exists", "layer": "repo", "level": "recommended", "applies_to": ["all"],
+      "when": { "visibility": "public" },
+      "check": { "type": "builtin", "name": "license_exists" },
+      "why": "テスト用", "fix": "テスト用" }
+  ]
+}
+EOF
+
+# gh スタブ: RS_TEST_GH で auth / repo view の成否を切り替える
+vis_bin="$tmp/vis-bin"
+mkdir -p "$vis_bin"
+cat > "$vis_bin/gh" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  auth) [ "${RS_TEST_GH:-}" = unauth ] && exit 1; exit 0 ;;
+  repo) [ "${RS_TEST_GH:-}" = public ] || exit 1; echo false; exit 0 ;;
+esac
+exit 1
+EOF
+chmod +x "$vis_bin/gh"
+
+# 「gh が無い」を作るための最小 PATH。/usr/bin を足すと CI ランナーの gh を拾ってしまう
+# (GitHub-hosted runner は /usr/bin/gh に入っている) ので、必要な実行ファイルだけを張る
+nogh_bin="$tmp/nogh-bin"
+mkdir -p "$nogh_bin"
+for b in bash git jq dirname; do ln -sf "$(command -v "$b")" "$nogh_bin/$b"; done
+
+vis_run() { # <mode: nogh|unauth|norepo|public> <remote: 0|1> → license-exists の 1 行
+  local dir="$tmp/vis-$RANDOM" path
+  mkdir -p "$dir"
+  ( cd "$dir" && git init -q -b main && git commit -q --allow-empty -m init &&
+    { [ "$2" = 0 ] || git remote add origin https://github.com/x/y.git; } ) >/dev/null 2>&1
+  if [ "$1" = nogh ]; then path="$nogh_bin"; else path="$vis_bin:$PATH"; fi
+  ( cd "$dir" && PATH="$path" RS_TEST_GH="$1" REPO_STANDARDS_JSON="$vis_manifest" \
+      bash "$target" | jq -c 'select(.id == "license-exists")' )
+}
+
+assert_vis() { # <mode> <remote> <detail に含まれるべき文字列> <ケース名>
+  local line got
+  line=$(vis_run "$1" "$2")
+  got=$(jq -r '.detail' <<<"$line")
+  if [ "$(jq -r .status <<<"$line")" = skip ] && grep -qF "$3" <<<"$got"; then
+    echo "  [ok]   $4 → $got"
+  else
+    echo "  [FAIL] $4 → 期待 skip かつ '$3' を含む / 実際 $(jq -r '"\(.status): \(.detail)"' <<<"$line")"
+    failures=$((failures + 1))
+  fi
+}
+
+# 4 通りをそれぞれの原因どおりに説明する (すべて「gh 未認証」に丸めない)。
+# 文言は同じ状況を正しく切り分けている rs-audit-github.sh の skip_all と揃える
+assert_vis nogh   1 "gh が無い"                     "gh が無い"
+assert_vis unauth 1 "gh 未認証"                     "gh 未認証"
+assert_vis norepo 0 "remote が無い"                 "remote が無い"
+assert_vis norepo 1 "GitHub 上のリポジトリを特定できない" "remote はあるが特定できない"
+
+# 可視性が引けたときは従来どおり判定へ進む (切り分けが skip を広げていないこと)
+line=$(vis_run public 1)
+if [ "$(jq -r .status <<<"$line")" = warn ]; then
+  echo "  [ok]   可視性が引ければ判定に進む (public リポで LICENSE 無し → warn)"
+else
+  echo "  [FAIL] 可視性が引けたケース → 期待 warn / 実際 $(jq -r .status <<<"$line")"
+  failures=$((failures + 1))
+fi
+
+# _meta にも理由を載せる (レポートのヘッダだけ見ても原因が分かる)
+meta=$( dir="$tmp/vis-meta"; mkdir -p "$dir"
+  ( cd "$dir" && git init -q -b main && git commit -q --allow-empty -m init ) >/dev/null 2>&1
+  ( cd "$dir" && PATH="$vis_bin:$PATH" RS_TEST_GH=norepo REPO_STANDARDS_JSON="$vis_manifest" \
+      bash "$target" | jq -r 'select(.id == "_meta") | .visibility_reason // ""' ) )
+if grep -q 'remote が無い' <<<"$meta"; then
+  echo "  [ok]   _meta に visibility_reason が載る → $meta"
+else
+  echo "  [FAIL] _meta の visibility_reason → 期待 'remote が無い' を含む / 実際 '$meta'"
+  failures=$((failures + 1))
+fi
 
 echo
 echo "正本の fix_kind を素通しする (修正側の承認粒度を決める契約):"

@@ -21,18 +21,34 @@ while IFS=$'\t' read -r kid marker; do
 done < <(jq -r '.kinds[] | [.id, (.marker // "__null__")] | @tsv' "$manifest")
 [ -n "$kind" ] || kind=${fallback:-generic}
 
-# when.visibility を評価するために可視性を引く。gh が無ければ "unknown" とし、
+# 可視性を引けなかった理由。gh 認証・remote の有無まで見て切り分ける — 原因が何であれ
+# 「gh 未認証」と言ってしまうと、受け手は gh auth login を疑って時間を使う。
+# 文言は同じ状況を切り分けている rs-audit-github.sh の skip_all と揃える。
+# gh repo view が失敗した経路でしか呼ばない (正常系の gh 呼び出しは 1 回のまま)
+visibility_unknown_reason() {
+  gh auth status >/dev/null 2>&1 || { echo "gh 未認証 (gh auth login)"; return; }
+  [ -n "$(git remote 2>/dev/null)" ] \
+    || { echo "remote が無い (git remote add origin ... して push する)"; return; }
+  echo "GitHub 上のリポジトリを特定できない (origin が github.com か・push 済みか確認)"
+}
+
+# when.visibility を評価するために可視性を引く。引けなければ "unknown" とし、
 # 可視性を条件にした項目だけを skip する (層全体は gh 無しでも動き続ける)
-visibility=unknown
-if command -v gh >/dev/null 2>&1; then
+visibility=unknown vis_reason=""
+if ! command -v gh >/dev/null 2>&1; then
+  vis_reason="gh が無い (brew install gh)"
+else
   case "$(gh repo view --json isPrivate --jq .isPrivate 2>/dev/null)" in
     true) visibility=private ;;
     false) visibility=public ;;
+    *) vis_reason=$(visibility_unknown_reason) ;;
   esac
 fi
 
 jq -cn --arg kind "$kind" --arg root "$root" --arg vis "$visibility" --arg manifest "$manifest" \
-  '{id:"_meta",layer:"repo",kind:$kind,root:$root,visibility:$vis,manifest:$manifest}'
+  --arg vis_reason "$vis_reason" \
+  '{id:"_meta",layer:"repo",kind:$kind,root:$root,visibility:$vis,manifest:$manifest}
+   + (if $vis_reason != "" then {visibility_reason:$vis_reason} else {} end)'
 
 # コミットが 1 件も無いリポは監査でなく生成の対象。全項目を並べても「まだ何も無い」の
 # 言い換えにしかならず、README・CLAUDE.md・CI のようにリポの実体を材料にする生成的 fix は
@@ -206,6 +222,10 @@ builtin_scheduled_workflow_exists() {
 # 最終コミットから 30 日以上動いていないものだけを残骸とみなす
 builtin_no_stale_branches() {
   local now cutoff stale b ts
+  # リモート追跡 ref が 1 本も無ければ検査対象がゼロ。「残骸が無い」ではないので ok に
+  # 丸めない (origin/main しか無いリポは対象があるので通常どおり判定する)
+  [ -n "$(git branch -r 2>/dev/null)" ] \
+    || { echo "skip:リモート追跡ブランチが無い (remote 未設定か未 push。fetch 済みのローカル ref で判定する)"; return; }
   now=$(date +%s); cutoff=$((now - 30 * 86400)); stale=""
   while IFS= read -r b; do
     [ -n "$b" ] || continue
@@ -219,6 +239,9 @@ builtin_no_stale_branches() {
 # 秘密ファイルが追跡対象に入っていないか。履歴の書き換えは不可逆なので検出のみ
 builtin_no_committed_secrets() {
   local hits
+  # 追跡ファイルが 1 件も無ければ検査対象がゼロ。「秘密が混ざっていない」ではない
+  [ -n "$(git ls-files 2>/dev/null | head -1)" ] \
+    || { echo "skip:追跡中のファイルが無い (突き合わせる対象がゼロ)"; return; }
   hits=$(git ls-files 2>/dev/null | grep -iE '(^|/)(\.env(\.[a-z]+)?|.*\.pem|.*\.p12|.*\.key|id_rsa|.*\.keystore|.*credentials\.json)$' \
     | grep -viE '(\.env\.(example|sample|template)|\.lock)' | head -5)
   [ -z "$hits" ] && { echo ok; return; }
@@ -258,8 +281,15 @@ removable_worktrees() { # → basename を 1 行ずつ
 
 # 使い終わった worktree の残骸。~/.claude/ の symlink が worktree を指す事故の温床でもある
 builtin_worktrees_clean() {
+  local dirs registered orphan n
+  n=$(git worktree list --porcelain 2>/dev/null | grep -c '^worktree ' || echo 0)
+  # linked worktree も置き場のディレクトリも無ければ、掃除できる残骸が存在しない。
+  # ディレクトリだけある状態は「使っているが今は残骸ゼロ」なので検査結果の ok
+  if [ "$n" -le 1 ] && [ ! -d .claude/worktrees ]; then
+    echo "skip:linked worktree が無い (掃除の対象がゼロ)"
+    return
+  fi
   [ -d .claude/worktrees ] || { echo ok; return; }
-  local dirs registered orphan
   registered=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}')
   orphan=""
   for dirs in .claude/worktrees/*/; do
@@ -267,8 +297,6 @@ builtin_worktrees_clean() {
     dirs=${dirs%/}
     printf '%s\n' "$registered" | grep -qF "$(cd "$dirs" && pwd)" || orphan="$orphan $(basename "$dirs")"
   done
-  local n
-  n=$(git worktree list --porcelain 2>/dev/null | grep -c '^worktree ' || echo 0)
   if [ -n "$orphan" ]; then
     echo "fail:git に登録されていない worktree ディレクトリ:$orphan"
   elif [ "$n" -gt 3 ]; then
@@ -307,7 +335,7 @@ while IFS= read -r item; do
   want_vis=$(jq -r '.when.visibility // ""' <<<"$item")
   if [ -n "$want_vis" ] && [ "$want_vis" != "$visibility" ]; then
     if [ "$visibility" = unknown ]; then
-      emit "$id" "$layer" "$level" skip "$want_vis リポのみ対象だが可視性を判定できない (gh 未認証)"
+      emit "$id" "$layer" "$level" skip "$want_vis リポのみ対象だが可視性を判定できない — $vis_reason"
     else
       emit "$id" "$layer" "$level" skip "$want_vis リポのみ対象 (このリポは $visibility)"
     fi
