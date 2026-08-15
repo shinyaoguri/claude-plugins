@@ -68,12 +68,14 @@ run_mark() {
 }
 
 # PR の JSON。$2 で author を差し替える (bot 判定の確認用)、$3 で auto-merge の
-# 有無を差し替える (載っていれば gh は autoMergeRequest オブジェクトを返す)
+# 有無を差し替える (載っていれば gh は autoMergeRequest オブジェクトを返す)、
+# $4/$5 でマージ可否を差し替える (コンフリクト判定の確認用)
 open_pr() {
   cat <<EOF
 {"number":1,"state":"OPEN","url":"https://example.com/pr/1",
  "author":{"login":"${2:-shinyaoguri}"},
  "autoMergeRequest":${3:-null},
+ "mergeable":"${4:-MERGEABLE}","mergeStateStatus":"${5:-CLEAN}",
  "statusCheckRollup":[$1]}
 EOF
 }
@@ -140,6 +142,42 @@ put_marker
 rollup "$(open_pr "$green")"
 check "CI 全部 green → 終わってよい" 0 "$(run_stop)"
 check "  green なら印を消す" absent "$(marker_state)"
+
+# コンフリクトすると GitHub はマージコミットを作れず、チェックが 1 件も作られない。
+# 「赤も pending も無い」を green と区別できず素通りしていた (#111)
+put_marker
+rollup "$(open_pr "" shinyaoguri null CONFLICTING DIRTY)"
+check "コンフリクト → 継続させる (checks 0 件でも素通りしない)" 2 "$(run_stop)"
+check "  main の取り込みを指示する" 0 "$(grep -q 'origin/main' "$sandbox/err"; echo $?)"
+check "  修正回数に数える" "fixes=1" "$(sed -n 's/^\(fixes=.*\)/\1/p' "$marker")"
+
+# 赤より先にコンフリクトを解消させる (main を取り込むまで CI の赤を論じても仕方がない)
+put_marker
+rollup "$(open_pr "$red" shinyaoguri null CONFLICTING DIRTY)"
+check "コンフリクト × 赤 → コンフリクトを先に差し戻す (順序の境界値)" 2 "$(run_stop)"
+check "  失敗ログを読ませる手順は出さない" 1 "$(grep -q 'gh run view' "$sandbox/err"; echo $?)"
+
+put_marker 3 0
+rollup "$(open_pr "" shinyaoguri null CONFLICTING DIRTY)"
+check "コンフリクトも修正 3 回で打ち切る" 0 "$(run_stop)"
+check "  打ち切ったら印を消す" absent "$(marker_state)"
+
+# コンフリクト以外にもチェックが 0 件になる道はある (トリガ条件から外れた / Actions 無効)
+put_marker
+rollup "$(open_pr "")"
+check "チェックが 1 件も無い → green と区別して差し戻す" 2 "$(run_stop)"
+check "  待ち受けさせない (0 件では gh pr checks --watch がエラー終了する)" 1 \
+  "$(grep -q -- '--watch' "$sandbox/err"; echo $?)"
+check "  状態を 1 回で引く手順を案内する" 0 "$(grep -q 'gh pr view 1 --json' "$sandbox/err"; echo $?)"
+check "  待機回数に数える" "waits=1" "$(sed -n 's/^\(waits=.*\)/\1/p' "$marker")"
+
+put_marker 0 6
+check "チェック 0 件も待機 6 回で打ち切る" 0 "$(run_stop)"
+
+# mergeable は GitHub が非同期に計算するので UNKNOWN を返しうる。誤検知で止めない (境界値)
+put_marker
+rollup "$(open_pr "$green" shinyaoguri null UNKNOWN UNKNOWN)"
+check "mergeable UNKNOWN × green → 誤検知で止めない" 0 "$(run_stop)"
 
 put_marker
 rollup "$(open_pr "$red" "dependabot[bot]")"

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Stop hook — push した PR の CI が赤いまま終わろうとしたら、終わらせずに直させる。
 #
-# ci-watch-mark.sh が置いた印があるときだけ動く。CI が
-#   - 実行中     → auto-merge へ載せたうえで見届けるよう指示して継続 (exit 2)
-#   - 失敗       → 失敗ジョブとログ取得コマンドを添えて修正を指示 (exit 2)
-#   - 全部成功   → 印を消して終了 (exit 0)
+# ci-watch-mark.sh が置いた印があるときだけ動く。PR が
+#   - コンフリクト → main の取り込みを指示して継続 (exit 2)
+#   - 失敗         → 失敗ジョブとログ取得コマンドを添えて修正を指示 (exit 2)
+#   - 実行中       → auto-merge へ載せたうえで見届けるよう指示して継続 (exit 2)
+#   - チェック 0 件 → green と区別が付かないので確認を指示して継続 (exit 2)
+#   - 全部成功     → 印を消して終了 (exit 0)
 #   - マージ済み / bot の PR / PR 無し → 印を消して終了 (exit 0)
 #
 # 暴走しないよう回数で打ち切る (修正 3 回 / 待機 6 回)。打ち切ったら印を消すので、
@@ -48,7 +50,9 @@ waits=$(sed -n 's/^waits=//p' "$marker")
 fixes=${fixes:-0}
 waits=${waits:-0}
 
-pr=$(gh pr view "$branch" --json number,state,url,author,statusCheckRollup,autoMergeRequest 2>/dev/null) || {
+pr=$(gh pr view "$branch" \
+  --json number,state,url,author,statusCheckRollup,autoMergeRequest,mergeable,mergeStateStatus \
+  2>/dev/null) || {
   # PR がまだ無い (push しただけ) / 取得できない — 見張る対象が無いので黙って終わる
   rm -f "$marker"
   exit 0
@@ -68,6 +72,42 @@ esac
 
 number=$(printf '%s' "$pr" | jq -r '.number')
 url=$(printf '%s' "$pr" | jq -r '.url')
+
+# コンフリクトしている間、GitHub は pull_request のマージコミットを作れず、チェックが
+# 1 件も走らない。赤も pending も無いので rollup だけでは green と区別が付かず、
+# 素通りさせていた (claude-plugins#111)。赤を論じる前に main を取り込ませる。
+# mergeable は非同期に計算されるため UNKNOWN を返しうるが、そこでは止めない
+# (誤検知でセッションを止めるより、下の「チェック 0 件」で拾う方が害が小さい)。
+mergeable=$(printf '%s' "$pr" | jq -r '.mergeable // ""')
+merge_state=$(printf '%s' "$pr" | jq -r '.mergeStateStatus // ""')
+if [ "$mergeable" = "CONFLICTING" ] || [ "$merge_state" = "DIRTY" ]; then
+  if [ "$fixes" -ge "$MAX_FIXES" ]; then
+    rm -f "$marker"
+    exit 0
+  fi
+  printf 'branch=%s\nfixes=%s\nwaits=%s\n' "$branch" "$((fixes + 1))" "$waits" > "$marker"
+  cat >&2 <<EOF
+PR #$number ($branch) が main とコンフリクトしています (自動修正 $((fixes + 1))/$MAX_FIXES 回目)。終了せず解消してください。
+
+コンフリクトしている間は CI のチェックが 1 件も走りません (チェックが 0 件なのは green だから
+ではありません)。auto-merge に載っていても、このままではマージされずに残り続けます。
+
+手順:
+1. main を取り込む:
+     git fetch origin && git merge origin/main
+2. コンフリクトを解消してコミットし、この PR のブランチへ push する。
+3. push 後に CI が走り出すことを確認する:
+     gh pr view $number --json state,mergeable,mergeStateStatus,statusCheckRollup
+
+注意:
+- 解消は「今回の変更の意図」と「main 側の変更の意図」の両方を残す形で行う。片方を捨てて
+  通すだけの解消はしない。
+- 手に負えないコンフリクトだと分かったら、直さずに状況を報告して終えてよい
+  (この hook は $MAX_FIXES 回で自動的に黙ります)。
+- PR: $url
+EOF
+  exit 2
+fi
 
 # statusCheckRollup は CheckRun (status/conclusion) と StatusContext (state) が混在する
 failed=$(printf '%s' "$pr" | jq -r '
@@ -144,6 +184,32 @@ EOF
   exit 2
 fi
 
-# 全部 green (または該当チェック無し)
+# チェックが 1 件も無い — コンフリクト以外にもここへ来る道がある (トリガ条件から外れた、
+# Actions が無効、push がまだ届いていない)。green と同じ経路で通すと「CI を確認した」ように
+# 見えたまま終わるので、一度は人間に見せる。待てば解決する筋なので待機側に数える。
+checks=$(printf '%s' "$pr" | jq -r '(.statusCheckRollup // []) | length')
+if [ "$checks" -eq 0 ]; then
+  if [ "$waits" -ge "$MAX_WAITS" ]; then
+    rm -f "$marker"
+    exit 0
+  fi
+  printf 'branch=%s\nfixes=%s\nwaits=%s\n' "$branch" "$fixes" "$((waits + 1))" > "$marker"
+  cat >&2 <<EOF
+PR #$number ($branch) にチェックが 1 件も登録されていません ($((waits + 1))/$MAX_WAITS 回目)。green と区別が付かないので、確認してから終えてください。
+
+  gh pr view $number --json state,mergeable,mergeStateStatus,statusCheckRollup
+
+チェックが 0 件のときは待ち受け (gh pr checks) がエラー終了するので、状態はこのコマンドで引きます。
+
+疑う先:
+- push した直後で、まだワークフローが登録されていない (少し置いてもう一度引く)
+- ワークフローのトリガ条件から外れている (paths / branches フィルタ)
+- リポジトリで Actions が無効、または実行が承認待ちになっている
+- PR: $url
+EOF
+  exit 2
+fi
+
+# 全部 green
 rm -f "$marker"
 exit 0
