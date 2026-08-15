@@ -281,15 +281,22 @@ removable_worktrees() { # → basename を 1 行ずつ
 
 # 使い終わった worktree の残骸。~/.claude/ の symlink が worktree を指す事故の温床でもある
 builtin_worktrees_clean() {
-  local dirs registered orphan n
+  local dirs registered orphan n linked lead
   n=$(git worktree list --porcelain 2>/dev/null | grep -c '^worktree ' || echo 0)
+  linked=$(( n > 0 ? n - 1 : 0 ))
   # linked worktree も置き場のディレクトリも無ければ、掃除できる残骸が存在しない。
   # ディレクトリだけある状態は「使っているが今は残骸ゼロ」なので検査結果の ok
   if [ "$n" -le 1 ] && [ ! -d .claude/worktrees ]; then
     echo "skip:linked worktree が無い (掃除の対象がゼロ)"
     return
   fi
-  [ -d .claude/worktrees ] || { echo ok; return; }
+  # 掃除の観点とは別に、linked worktree を使っているリポでは「別 worktree への誤書き込みを
+  # 止めるマシン側のガードが実際に効いているか」が問題になる。判定は env-doctor に一本化し
+  # (リポ層の項目にするとマシン 1 台の事実を全リポぶん判定することになる)、ここは本数を
+  # detail の先頭へ固定で載せるだけにする。スキル側が自由文でなく本数で分岐できる
+  # (経緯: claude-plugins#82)
+  lead="linked worktree $linked 個"
+  [ -d .claude/worktrees ] || { echo "ok:$lead (.claude/worktrees は無い)"; return; }
   registered=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}')
   orphan=""
   for dirs in .claude/worktrees/*/; do
@@ -298,19 +305,19 @@ builtin_worktrees_clean() {
     printf '%s\n' "$registered" | grep -qF "$(cd "$dirs" && pwd)" || orphan="$orphan $(basename "$dirs")"
   done
   if [ -n "$orphan" ]; then
-    echo "fail:git に登録されていない worktree ディレクトリ:$orphan"
+    echo "fail:$lead / git に登録されていない worktree ディレクトリ:$orphan"
   elif [ "$n" -gt 3 ]; then
     # 個数だけでは緊急度が伝わらない (1 リポで 9 GB 超えた実例がある) ので容量を添える
     local mb removable
     mb=$(du -sk .claude/worktrees 2>/dev/null | awk '{printf "%d", $1 / 1024}')
     removable=$(removable_worktrees | tr '\n' ' ')
     if [ -n "${removable// /}" ]; then
-      echo "fail:worktree が $((n - 1)) 個 / ${mb} MB ある。upstream が [gone] で未コミットの変更も無い候補: ${removable% }"
+      echo "fail:$lead / ${mb} MB ある。upstream が [gone] で未コミットの変更も無い候補: ${removable% }"
     else
-      echo "fail:worktree が $((n - 1)) 個 / ${mb} MB ある (自動で安全と判定できる候補は無い。squash merge では ahead N が未マージを意味しないので、PR のマージ状況で確認する)"
+      echo "fail:$lead / ${mb} MB ある (自動で安全と判定できる候補は無い。squash merge では ahead N が未マージを意味しないので、PR のマージ状況で確認する)"
     fi
   else
-    echo ok
+    echo "ok:$lead (掃除の対象となる残骸は無い)"
   fi
 }
 

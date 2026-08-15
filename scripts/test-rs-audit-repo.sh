@@ -129,8 +129,10 @@ init_commit=1
 # assert <期待 status> <ケース名> <セットアップコマンド...>
 assert() {
   local want=$1 name=$2; shift 2
-  local dir="$tmp/case-$RANDOM"
-  mkdir -p "$dir"
+  # $RANDOM だと衝突したケースが前のケースの git リポを引き継ぐ (ケース数が増えるほど
+  # 起きやすく、しかも結果だけ見ると原因が分からない) ので必ず新しいディレクトリを取る
+  local dir
+  dir=$(mktemp -d "$tmp/case-XXXXXX")
   ( cd "$dir" && git init -q -b main \
       && { [ "$init_commit" -eq 0 ] || git commit -q --allow-empty -m init; } \
       && "$@" ) || { echo "  [ERROR] $name: セットアップ失敗"; failures=$((failures + 1)); return; }
@@ -391,6 +393,57 @@ assert ok ".claude/worktrees が空" mkdir -p .claude/worktrees
 assert warn "git 未登録のディレクトリが残っている" mkdir -p .claude/worktrees/leftover
 
 echo
+echo "builtin_worktrees_clean (linked worktree の本数を detail に載せる):"
+
+# repo-audit の SKILL.md は「detail が linked worktree N 個 で N ≥ 1 なら env-doctor を促す」
+# と分岐する。本数は自由文でなく契約なので、status だけでなく detail まで見る
+# assert_detail <期待 status> <detail に含まれるべき文字列> <ケース名> <セットアップコマンド...>
+assert_detail() {
+  local want=$1 want_detail=$2 name=$3; shift 3
+  local dir
+  dir=$(mktemp -d "$tmp/case-XXXXXX")
+  ( cd "$dir" && git init -q -b main && git commit -q --allow-empty -m init && "$@" ) \
+    || { echo "  [ERROR] $name: セットアップ失敗"; failures=$((failures + 1)); return; }
+
+  local line got detail
+  line=$( cd "$dir" && REPO_STANDARDS_JSON="$manifest" bash "$target" \
+    | jq -c --arg id "$check_id" 'select(.id == $id)' )
+  got=$(jq -r .status <<<"$line")
+  detail=$(jq -r .detail <<<"$line")
+
+  if [ "$got" = "$want" ] && grep -qF "$want_detail" <<<"$detail"; then
+    echo "  [ok]   $name → $got / $detail"
+  else
+    echo "  [FAIL] $name → 期待 $want + \"$want_detail\" / 実際 $got + \"$detail\""
+    failures=$((failures + 1))
+  fi
+}
+
+# 境界値: ディレクトリはあるが linked worktree はゼロ。導線を出さない側に落ちること
+assert_detail ok "linked worktree 0 個" "空ディレクトリでは 0 個" \
+  mkdir -p .claude/worktrees
+
+# 正常系: linked worktree を 1 本使っている (しきい値未満なので掃除としては ok)
+assert_detail ok "linked worktree 1 個" "1 本使っていれば 1 個" \
+  bash -c 'git branch -q wt && mkdir -p .claude/worktrees && git worktree add -q .claude/worktrees/wt wt'
+
+# 失敗系でも本数は落とさない (掃除の指摘とガードの導線は別の関心事)
+assert_detail warn "linked worktree 0 個" "orphan の指摘にも本数が載る" \
+  mkdir -p .claude/worktrees/leftover
+
+# 境界値: 対象ゼロの skip に本数は載せない (「対象が無い」と「0 個」を混同させない)
+skip_detail=$( cd "$(mktemp -d "$tmp/case-XXXXXX")" && git init -q -b main \
+  && git commit -q --allow-empty -m init \
+  && REPO_STANDARDS_JSON="$manifest" bash "$target" \
+  | jq -r 'select(.id == "worktrees-clean") | .detail' )
+if grep -qF "個" <<<"$skip_detail"; then
+  echo "  [FAIL] skip に本数を載せてはいけない → $skip_detail"
+  failures=$((failures + 1))
+else
+  echo "  [ok]   skip には本数を載せない → $skip_detail"
+fi
+
+echo
 echo "builtin_worktrees_clean (容量と安全に消せる候補):"
 
 # しきい値 (本体 + 3) を超える worktree を用意し、消せる / 消せないを 1 リポに揃える。
@@ -434,6 +487,13 @@ if grep -qE '[0-9]+ MB' <<<"$detail"; then
   echo "  [ok]   個数だけでなく容量を添える → $(grep -oE '[0-9]+ MB' <<<"$detail")"
 else
   echo "  [FAIL] 容量が detail に無い → $detail"
+  failures=$((failures + 1))
+fi
+
+if grep -qF 'linked worktree 4 個' <<<"$detail"; then
+  echo "  [ok]   しきい値超えの指摘にも本数が載る"
+else
+  echo "  [FAIL] 本数が detail に無い → $detail"
   failures=$((failures + 1))
 fi
 
