@@ -7,6 +7,7 @@
 - プラグインは上流正典ドキュメントへの**薄いルーター**。正典の内容を複製しない (ADR [0001](docs/decisions/0001-thin-router.md))
 - プラグイン本文に上流リポのパス・ファイル参照を書き足したら [upstream-refs.json](upstream-refs.json) にも追記する (PR CI の coverage チェックが漏れを検出する)
 - 公式が非推奨とする構成は使わない (ADR [0004](docs/decisions/0004-deprecation-guard.md)、`scripts/check-deprecated-patterns.sh` が CI で強制)。スラッシュコマンドも `commands/` でなく `skills/<name>/SKILL.md` として作る
+- 汎用スキルは `~/.claude/skills/` でなく **plugin として配る** (ADR [0020](docs/decisions/0020-skills-ship-as-plugins.md))。hooks・agents・scripts を同じ単位に束ねられ、enable/disable と version で伝搬を制御できるのはプラグインだけ
 - プラグインの粒度は **enable/disable と version の単位**で決める (ADR [0009](docs/decisions/0009-plugin-granularity.md))。description の凝集度だけを理由に分割しない (スキルの起動判定は SKILL.md の description のみを見るため、分割しても起動精度は変わらない)
 
 ## 検証
