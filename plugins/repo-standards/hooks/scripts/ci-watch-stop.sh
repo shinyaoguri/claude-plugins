@@ -2,7 +2,7 @@
 # Stop hook — push した PR の CI が赤いまま終わろうとしたら、終わらせずに直させる。
 #
 # ci-watch-mark.sh が置いた印があるときだけ動く。CI が
-#   - 実行中     → 見届けるよう指示して継続 (exit 2)
+#   - 実行中     → auto-merge へ載せたうえで見届けるよう指示して継続 (exit 2)
 #   - 失敗       → 失敗ジョブとログ取得コマンドを添えて修正を指示 (exit 2)
 #   - 全部成功   → 印を消して終了 (exit 0)
 #   - マージ済み / bot の PR / PR 無し → 印を消して終了 (exit 0)
@@ -13,6 +13,11 @@
 # ローカル検証コマンドはリポごとに違うが、この hook は持たない。個人標準が
 # 「CLAUDE.md に検証コマンドを書く」を要求している (repo-standards.json の
 # claude-md-quality) ので、そちらへ委譲する (経緯: claude-plugins#86 / ADR 0016)。
+#
+# 見届けさせるのは「赤を残して立ち去らない」ためであって、マージのためではない。
+# green を待って手で merge する運用にすると、セッションと人間の両方が CI に
+# 拘束される。auto-merge に載っていなければ、まず載せさせる (metaphor の運用:
+# 「green を待つために CI を watch して手動 merge する運用はしない」)。
 #
 # stdin: Stop の JSON (.session_id / .cwd)
 set -uo pipefail
@@ -43,7 +48,7 @@ waits=$(sed -n 's/^waits=//p' "$marker")
 fixes=${fixes:-0}
 waits=${waits:-0}
 
-pr=$(gh pr view "$branch" --json number,state,url,author,statusCheckRollup 2>/dev/null) || {
+pr=$(gh pr view "$branch" --json number,state,url,author,statusCheckRollup,autoMergeRequest 2>/dev/null) || {
   # PR がまだ無い (push しただけ) / 取得できない — 見張る対象が無いので黙って終わる
   rm -f "$marker"
   exit 0
@@ -113,13 +118,29 @@ if [ "$pending" -gt 0 ]; then
     exit 0
   fi
   printf 'branch=%s\nfixes=%s\nwaits=%s\n' "$branch" "$fixes" "$((waits + 1))" > "$marker"
-  cat >&2 <<EOF
-PR #$number ($branch) の CI がまだ実行中です ($pending 件)。結果を見届けてから終えてください。
+  if printf '%s' "$pr" | jq -e '.autoMergeRequest' >/dev/null 2>&1; then
+    cat >&2 <<EOF
+PR #$number ($branch) の CI がまだ実行中です ($pending 件)。auto-merge に載っているので、赤くならないことだけ見届けてください。
 
   gh pr checks $number --watch --interval 20
 
-green ならそのまま終了して構いません (auto-merge 済みならマージされます)。赤なら失敗ログを読んで直してください。
+green ならそのまま終了して構いません (GitHub がマージするので、マージのために戻る必要はありません)。赤なら失敗ログを読んで直してください。
 EOF
+  else
+    cat >&2 <<EOF
+PR #$number ($branch) の CI がまだ実行中です ($pending 件)。マージのために green を待つ必要はありません — auto-merge に載せてから見届けてください。
+
+1. auto-merge に載せる (green になった時点で GitHub がマージする):
+     gh pr merge $number --squash --auto
+2. 赤くならないことを見届ける:
+     gh pr checks $number --watch --interval 20
+
+green ならそのまま終了して構いません (マージのために戻る必要はありません)。赤なら失敗ログを読んで直してください。
+
+注意: 1 が "Auto-merge is not allowed for this repository" で断られたら、リポジトリ設定の側の問題です
+(個人標準の gh-auto-merge-enabled。/repo-audit で直せます)。その場合はこのセッションで green を見届けてください。
+EOF
+  fi
   exit 2
 fi
 
