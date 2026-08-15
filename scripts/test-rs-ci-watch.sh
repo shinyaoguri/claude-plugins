@@ -67,14 +67,18 @@ run_mark() {
     | bash "$mark_hook" >/dev/null 2>&1
 }
 
-# PR の JSON。$2 で author を差し替える (bot 判定の確認用)
+# PR の JSON。$2 で author を差し替える (bot 判定の確認用)、$3 で auto-merge の
+# 有無を差し替える (載っていれば gh は autoMergeRequest オブジェクトを返す)
 open_pr() {
   cat <<EOF
 {"number":1,"state":"OPEN","url":"https://example.com/pr/1",
  "author":{"login":"${2:-shinyaoguri}"},
+ "autoMergeRequest":${3:-null},
  "statusCheckRollup":[$1]}
 EOF
 }
+
+auto_merge_on='{"enabledAt":"2026-08-16T00:00:00Z","mergeMethod":"SQUASH"}'
 
 green='{"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"u"}'
 red='{"__typename":"CheckRun","name":"build-and-test","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://example.com/job/42"}'
@@ -111,6 +115,23 @@ put_marker
 rollup "$(open_pr "$running,$green")"
 check "CI 実行中 → 見届けさせる" 2 "$(run_stop)"
 check "  待機回数を数える" "waits=1" "$(sed -n 's/^\(waits=.*\)/\1/p' "$marker")"
+
+# 待つのは「赤を残さない」ためであって、マージのためではない。auto-merge に
+# 載っていなければ、まず載せさせる (green を待って手で merge させない)
+check "  auto-merge 未設定なら載せるよう促す" 0 \
+  "$(grep -q 'gh pr merge 1 --squash --auto' "$sandbox/err"; echo $?)"
+check "  マージのために待つ必要が無いと伝える" 0 \
+  "$(grep -q 'マージのために green を待つ必要はありません' "$sandbox/err"; echo $?)"
+check "  auto-merge が禁止なら設定側の問題だと伝える" 0 \
+  "$(grep -q 'gh-auto-merge-enabled' "$sandbox/err"; echo $?)"
+
+put_marker
+rollup "$(open_pr "$running,$green" shinyaoguri "$auto_merge_on")"
+check "CI 実行中 × auto-merge 済み → 見届けだけさせる" 2 "$(run_stop)"
+check "  すでに載っているので載せ直させない" 1 \
+  "$(grep -q -- '--auto' "$sandbox/err"; echo $?)"
+check "  マージのために戻る必要が無いと伝える" 0 \
+  "$(grep -q '戻る必要はありません' "$sandbox/err"; echo $?)"
 
 put_marker 0 6
 check "待機 6 回で打ち切る" 0 "$(run_stop)"
