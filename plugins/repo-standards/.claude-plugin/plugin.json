@@ -1,7 +1,7 @@
 {
   "name": "repo-standards",
   "description": "個人の開発運用標準を実行する。リポジトリ構成・GitHub 設定・マシンの Claude 環境を正本 (shinyaoguri/setup の repo-standards.json) と突き合わせて監査・修正・雛形生成し、作業の記録 (Issue・PR へのスクリーンショット添付、気付きの起票) を標準どおりの手順で行う",
-  "version": "0.32.1",
+  "version": "0.32.2",
   "author": {
     "name": "Shinya Oguri"
   },
