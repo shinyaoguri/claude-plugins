@@ -30,19 +30,31 @@ trap 'rm -rf "$sandbox"' EXIT
 export GIT_CONFIG_GLOBAL="$sandbox/empty-gitconfig"
 
 repo="$sandbox/repo"
+other="$sandbox/other"
 mkdir -p "$repo/src" "$repo/docs" "$sandbox/outside"
-git -c init.defaultBranch=main init -q "$repo"
-git -C "$repo" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m init
+for r in "$repo" "$other"; do
+  git -c init.defaultBranch=main init -q "$r"
+  git -C "$r" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m init
+done
 
+# 同じリポの linked worktree (親リポと印の置き場が一致するかの検証用)
+wt="$sandbox/wt"
+git -C "$repo" worktree add -q "$wt" -b wt >/dev/null 2>&1
+mkdir -p "$wt/src"
+
+# 台帳はリポジトリ単位 (.git 配下)、承認印はセッション単位 (cwd 非依存の置き場)
 gate_dir="$repo/.git/claude-plan-gate"
+approved_dir="$sandbox/plan-gate"
+export RS_PLAN_GATE_DIR="$approved_dir"
 
-reset() { rm -rf "$gate_dir"; }
+reset() { rm -rf "$gate_dir" "$approved_dir"; }
 
 # stdin の PreToolUse JSON を組んで hook を叩く。$2 で permission_mode、$3 で
-# tool_input のキー名 (NotebookEdit は notebook_path) を差し替える
+# tool_input のキー名 (NotebookEdit は notebook_path) を差し替える。
+# cwd は既定で $repo、decision_in で差し替える (bash の動的スコープを使う)
 run_gate() {
   printf '{"session_id":"sess1","cwd":"%s","permission_mode":"%s","tool_input":{"%s":"%s"}}' \
-    "$repo" "${2:-default}" "${3:-file_path}" "$1" | bash "$gate_hook" 2>"$sandbox/err"
+    "${gate_cwd:-$repo}" "${2:-default}" "${3:-file_path}" "$1" | bash "$gate_hook" 2>"$sandbox/err"
 }
 
 # 素通し (無出力) なら pass、判定を返したらその permissionDecision
@@ -52,7 +64,19 @@ decision() {
   if [ -z "$out" ]; then echo pass; else printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision'; fi
 }
 
+# decision_in <cwd> <ファイル> — 別ディレクトリから呼ばれたことにする
+decision_in() {
+  local gate_cwd="$1"
+  shift
+  decision "$@"
+}
+
 reason() { run_gate "$@" | jq -r '.hookSpecificOutput.permissionDecisionReason'; }
+
+# mark <cwd> [session] — ExitPlanMode が通ったときの PostToolUse を再現する
+mark() {
+  printf '{"session_id":"%s","cwd":"%s"}' "${2:-sess1}" "$1" | bash "$mark_hook" >/dev/null 2>&1
+}
 
 echo "plan-gate.sh (PreToolUse: 合意なしに実装が広がるのを止める):"
 
@@ -75,11 +99,14 @@ check "触ったファイルを差し戻し文面に並べる" 0 \
   "$(reason src/c.txt | grep -q 'src/b.txt'; echo $?)"
 check "  次に何をすべきかを伝える" 0 \
   "$(reason src/c.txt | grep -q 'EnterPlanMode'; echo $?)"
+# 承認済みなのに差し戻されたとき、どこを見て無かったのかを掴めるようにする
+check "  印の置き場を文面に出す (誤爆したときの手がかり)" 0 \
+  "$(reason src/c.txt | grep -q "$approved_dir/sess1.approved"; echo $?)"
 
 # 承認済みプランがあれば以降このセッションでは何も言わない
 reset
-mkdir -p "$gate_dir"
-: > "$gate_dir/sess1.approved"
+mkdir -p "$approved_dir"
+: > "$approved_dir/sess1.approved"
 check "承認済みプランの印があれば素通し" pass "$(decision src/a.txt)"
 check "  何ファイル触っても素通し" pass "$(decision src/b.txt)"
 check "  さらに触っても素通し" pass "$(decision src/c.txt)"
@@ -118,24 +145,62 @@ check "git リポでなくても落ちない" 0 $?
 echo
 echo "plan-gate-mark.sh (PostToolUse: プラン承認で印を置く):"
 
+marker() { [ -f "$approved_dir/${1:-sess1}.approved" ] && echo present || echo absent; }
+
 reset
-printf '{"session_id":"sess1","cwd":"%s"}' "$repo" | bash "$mark_hook" >/dev/null 2>&1
-check "ExitPlanMode が通ったら印を置く" present \
-  "$([ -f "$gate_dir/sess1.approved" ] && echo present || echo absent)"
+mark "$repo"
+check "ExitPlanMode が通ったら印を置く" present "$(marker)"
 
 reset
 printf '{"session_id":"sess1","cwd":"%s"}' "$repo" | RS_PLAN_GATE=0 bash "$mark_hook" >/dev/null 2>&1
-check "RS_PLAN_GATE=0 なら印を置かない" absent \
-  "$([ -f "$gate_dir/sess1.approved" ] && echo present || echo absent)"
+check "RS_PLAN_GATE=0 なら印を置かない" absent "$(marker)"
 
 reset
-printf '{"session_id":"sess2","cwd":"%s"}' "$repo" | bash "$mark_hook" >/dev/null 2>&1
+mark "$repo" sess2
 decision src/a.txt >/dev/null
 decision src/b.txt >/dev/null
 check "印はセッション単位 (並行セッションに漏れない)" deny "$(decision src/c.txt)"
 
-printf '{"session_id":"sess1","cwd":"%s"}' "$sandbox/outside" | bash "$mark_hook" >/dev/null 2>&1
+mark "$sandbox/outside"
 check "git リポでなくても落ちない" 0 $?
+
+echo
+echo "印の置き場は cwd に依存しない (承認はセッションの事実であってリポの事実ではない):"
+
+# 回帰: ExitPlanMode の瞬間だけ Bash の cwd が別リポへドリフトしていても印は効く。
+# 以前は cwd から引いた git common-dir へ置いていたため、印が別リポの .git へ落ちて
+# 承認済みのまま deny が返っていた
+reset
+mark "$other"
+decision src/a.txt >/dev/null
+decision src/b.txt >/dev/null
+check "別リポの cwd で承認しても印が効く" pass "$(decision src/c.txt)"
+
+reset
+mark "$sandbox/outside"
+check "git 管理外の cwd で承認しても印が効く" present "$(marker)"
+
+reset
+printf '{"session_id":"sess1"}' | bash "$mark_hook" >/dev/null 2>&1
+check "cwd キーが無い JSON でも印を置ける (git を引かない)" present "$(marker)"
+
+# worktree ⇄ 親リポ。どちらから承認しても、もう一方の編集が素通しになる
+reset
+decision_in "$wt" src/a.txt >/dev/null
+decision_in "$wt" src/b.txt >/dev/null
+check "(対照) 承認が無ければ worktree 側でも 3 ファイル目で止まる" deny "$(decision_in "$wt" src/c.txt)"
+
+reset
+mark "$repo"
+decision_in "$wt" src/a.txt >/dev/null
+decision_in "$wt" src/b.txt >/dev/null
+check "親リポで承認 → worktree 側の編集が素通し" pass "$(decision_in "$wt" src/c.txt)"
+
+reset
+mark "$wt"
+decision src/a.txt >/dev/null
+decision src/b.txt >/dev/null
+check "worktree で承認 → 親リポ側の編集が素通し" pass "$(decision src/c.txt)"
 
 echo
 if [ "$failures" -gt 0 ]; then

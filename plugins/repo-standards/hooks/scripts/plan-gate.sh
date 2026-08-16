@@ -58,12 +58,17 @@ case "$abs" in
 esac
 
 # --- 承認済みプランの印 -------------------------------------------------------
+# 置き場は cwd に依存しない (plan-gate-mark.sh の冒頭を参照)。承認はセッションの
+# 事実なので、印を置いた側と読む側で cwd が違っても同じ場所を指す必要がある
+approved="${RS_PLAN_GATE_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plan-gate}/$session.approved"
+[ -f "$approved" ] && exit 0
+
+# --- 合意なしに触ったファイル数 -----------------------------------------------
+# 台帳はリポジトリ単位でよい (数えるのはこのリポの作業ツリー内のファイルだけで、
+# ここへ来る時点で cwd のリポと対象ファイルのリポは一致している)
 git_dir=$(git rev-parse --git-common-dir 2>/dev/null) || exit 0
 dir="$git_dir/claude-plan-gate"
 mkdir -p "$dir" 2>/dev/null || exit 0
-[ -f "$dir/$session.approved" ] && exit 0
-
-# --- 合意なしに触ったファイル数 -----------------------------------------------
 ledger="$dir/$session.files"
 touch "$ledger" 2>/dev/null || exit 0
 grep -Fxq "$abs" "$ledger" 2>/dev/null || printf '%s\n' "$abs" >> "$ledger"
@@ -79,7 +84,9 @@ ${touched}
 
 ここで手を止めて方向性の合意を取る。EnterPlanMode でプラン (目的・変更点・確認方法) を提示し、ユーザーが承認したら続きを実装する。承認された時点でこのゲートは以降このセッションでは何も言わない。
 
-実行の一つひとつに確認を挟まない代わりに、確認をこの 1 点へ集約している。ユーザーが「プランは要らない」と明示したときだけ RS_PLAN_GATE=0 で外す。" \
+実行の一つひとつに確認を挟まない代わりに、確認をこの 1 点へ集約している。ユーザーが「プランは要らない」と明示したときだけ RS_PLAN_GATE=0 で外す。
+
+承認印の置き場: ${approved} (未作成)。プランを承認済みなのにこの差し戻しが出たなら印が置かれていないということなので、実装を続けず、このパスごとユーザーへ報告する。" \
   '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r}}'
 
 exit 0
