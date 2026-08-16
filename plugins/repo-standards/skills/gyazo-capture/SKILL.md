@@ -1,6 +1,7 @@
 ---
 name: gyazo-capture
 description: "GUI を伴う作業 (画面・見た目・動き・操作手順) を Issue・PR に記録するとき、スクリーンショットや GIF を Gyazo にアップロードして URL を得る (リポジトリに画像をコミットしないため)。Use when a screenshot, animated GIF, or other visual evidence needs to be attached to a GitHub issue or pull request."
+allowed-tools: "mcp__gyazo-mac__gyazo_list_capturable_windows, mcp__gyazo-mac__gyazo_get_captured_image"
 ---
 
 ## 何を載せるか
@@ -64,6 +65,7 @@ MCP のツールは画面キャプチャ専用で、**手元のファイルを�
 - **`gyazo_get_captured_image` は URL と画像そのものを返す**。画像の読み込みはトークン高コストなので、URL が目的なら**呼び出しは 1 回に留める** (待ちが必要でも連打しない)
 - 完了済みのキャプチャが複数あるとまとめて返る。狙った 1 枚だけが欲しいなら、キャプチャ → 取得を 1 セットずつ行う
 - **リポジトリに画像・GIF をコミットしない** (容量を圧迫する)
+- frontmatter の `allowed-tools` に載せてあるのは読み取りの 2 つ (`gyazo_list_capturable_windows` / `gyazo_get_captured_image`) だけ。**`gyazo_capture_and_upload_*` を載せていないのは意図的**で、アップロードは外部サービスへの送信であり、写り込みの確認 (上記) を人間が飛ばせなくするため。頻度も 1 作業あたり 1〜2 回で、確認が作業の妨げにならない
 
 ## うまくいかないとき
 

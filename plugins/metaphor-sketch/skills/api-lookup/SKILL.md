@@ -1,6 +1,7 @@
 ---
 name: api-lookup
 description: metaphor (Swift + Metal クリエイティブコーディング) の API を調べる・未知のシンボルを使う・cannot find in scope 等のコンパイルエラーを直すとき、metaphor の API を書く前に必ず読む。llms.txt / llms-sketch.txt / examples-index の場所解決と検索レシピ。Use before writing or inventing any metaphor API call, when looking up function signatures, resolving "cannot find in scope" errors, or searching metaphor example sketches.
+allowed-tools: "mcp__metaphor__api_reference"
 ---
 
 # metaphor API の調べ方

@@ -1,6 +1,7 @@
 ---
 name: sketch-loop
 description: metaphor (Swift + Metal クリエイティブコーディング) のスケッチを作成・編集・実行・デバッグするとき、表示が真っ黒・想定と違う・snapshot が古い/別物に見えるとき、metaphor watch や MCP ツール (snapshot / capture_sequence / input / build_status / api_reference) を使うときに読む。Use when writing, fixing, or running a metaphor sketch (Sketch protocol, App.swift, import metaphor, metaphor watch/run), or when MCP snapshots look black, wrong, or stale.
+allowed-tools: "mcp__metaphor__snapshot, mcp__metaphor__capture_sequence, mcp__metaphor__input, mcp__metaphor__params, mcp__metaphor__set_param, mcp__metaphor__build_status, mcp__metaphor__api_reference"
 ---
 
 # metaphor スケッチの観測ループ (observe → edit → verify)
@@ -25,18 +26,21 @@ metaphor は「AI がいま見えている絵を観測しながら直す」た�
 3. **検証**: `build_status` でコンパイル成否を確認 → 成功したら `snapshot` で再観測
 4. 期待と違えば 2 に戻る。「直った」と主張する前に必ず snapshot で裏取りする
 
-## MCP 5 ツールの使い分け
+## MCP 7 ツールの使い分け
 
 | ツール | 使う場面 |
 |---|---|
 | `snapshot` | 静止した 1 フレームの確認。性能診断 (fps/メモリ/CPU/thermal) も frame.json の `performance` で画像に頼らず判定できる |
 | `capture_sequence` | 動き・リズム・遷移の確認 (frames 指定必須)。コンタクトシート + sequence.json が返る。1 枚でよければ snapshot |
 | `input` | 実行中スケッチへマウス・キー入力を送る (**単独モードのみ**。共有セッションでは入力注入なし) |
+| `params` | `@Param` で宣言された値の現在値と範囲を読む。何が振れるかを `set_param` の前に見る |
+| `set_param` | パラメータ値を**再ビルドなしで**書き換える。数値の探索は `set_param` → `snapshot` が速い (構造の変更はコード編集) |
 | `build_status` | 編集後のコンパイル成否・エラー出力の確認。snapshot の前に挟む |
 | `api_reference` | API を使う前の参照 (api-lookup スキル参照)。`grep` 引数で部分参照できる |
 
 - 初回の snapshot は cold-start を待つため `timeout` を長め (既定 15 秒) に。
 - スケッチ側から状態を報告させたいときは `draw()` 内で `probe("particles.count", n)` を書くと frame.json に載る (Probe 未登録時は no-op)。
+- 7 つとも frontmatter の `allowed-tools` に載せてある。**影響が実行中のスケッチプロセスに閉じる**ためで、`input` / `set_param` が変えるのも観測用のプロセスの状態にすぎない (パラメータは last-writer-wins で、人間の GUI ドラッグと対称)。ループは 1 スケッチで数十回まわるので、ここで確認を挟むと観測そのものが成立しない。`metaphor new` はスケッチごとに `.mcp.json` を置くため、**承認はスケッチを作るたびに振り出しに戻る** — 宣言側で済ませておく必要がある
 
 ## 詳細の在処
 
