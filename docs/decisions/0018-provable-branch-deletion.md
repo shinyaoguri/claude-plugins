@@ -35,6 +35,8 @@
 
   判定は [scripts/test-rs-branch-sweep.sh](../../scripts/test-rs-branch-sweep.sh) が PR CI で検証する (gh はスタブへ差し替え、`[gone]` は追跡先設定を残したまま remote-tracking を消して再現するのでネットワークに触れない)。
 
+  同じ軸を worktree にも当てる (#114)。`worktree-sweep.sh` (SessionStart) が自動で行うのは `git worktree prune` — **実ディレクトリが既に消えている登録**を畳むだけで、失われる情報が無いことが定義から明らかなもの — に限る。残骸 worktree の削除は、未コミットの変更や再生成できない ignored ファイル (`.env` 等) が残りうるので**証明できない削除**に当たり、従来どおり提示に留める (repo-audit の `worktrees_clean` が候補を挙げる)。ただし**既定ブランチを掴んだ linked worktree だけは、削除の可否とは別に通知する** — 溜まって重いのではなく、別の場所での `gh pr merge --delete-branch` をマージ後のローカル後処理で落とすため。判定は [scripts/test-rs-worktree-sweep.sh](../../scripts/test-rs-worktree-sweep.sh) が PR CI で検証する。
+
   既知の限界:
 
   - **証明は remote-tracking の鮮度に依存する**。`fetch.prune` が効いていないリポでは `[gone]` にならず、拾い漏らす (`env-git-fetch-prune` が診断する)

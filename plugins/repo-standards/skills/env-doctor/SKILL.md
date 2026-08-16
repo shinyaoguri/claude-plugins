@@ -32,6 +32,7 @@ allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh:*), Bas
 - git のグローバル設定 (fetch.prune・gone / gone-clean / stale / stale-clean エイリアスの実体): setup リポの tasks/git.yml
 - 自動モードの設定 (`permissions.defaultMode` / `permissions.ask` / `autoMode.{environment,allow,soft_deny,hard_deny}`) の正本: setup リポの claude/settings.json。組み込みルールの実物は `claude auto-mode defaults`
 - 役目を終えたローカルブランチの自動掃除: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/stale-branch-sweep.sh` (SessionStart)。止めたいときは `RS_BRANCH_SWEEP=0`、`[gone]` 側 (gh への照会) だけ止めるなら `RS_BRANCH_SWEEP_GONE=0`、1 セッションの照会本数は `RS_BRANCH_SWEEP_GONE_MAX` (既定 10)
+- 残骸 worktree の畳み込みと通知: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/worktree-sweep.sh` (SessionStart)。`git worktree prune` (実ディレクトリが消えた登録だけ) と、**既定ブランチを掴んだ linked worktree の通知**を行う。掴まれていると別の場所での `gh pr merge --delete-branch` がマージ後のローカル後処理で落ちる (#114)。worktree の削除はしない (ADR 0018 と同じ立場)。止めたいときは `RS_WORKTREE_SWEEP=0`
 - 合意の無いまま実装が広がるのを止めるプランゲート: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/plan-gate.sh` (PreToolUse)。閾値は `RS_PLAN_GATE_THRESHOLD`、止めたいときは `RS_PLAN_GATE=0`
 - 検査項目の実装: `${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh` (すべてビルトイン。正本 JSON に依存しない)
 - 削除系 (`git gone-clean`・実体コピーの `rm`) を allowed-tools に載せていないのは意図的。**証明できない削除**は提示のみに留める方針を許可の側でも担保する (証明できるものは hook 側で既に消えている)

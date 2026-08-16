@@ -49,6 +49,7 @@ jobs:
           ./scripts/test-rs-doctor-env.sh
           ./scripts/test-rs-ci-watch.sh
           ./scripts/test-rs-branch-sweep.sh
+          ./scripts/test-rs-worktree-sweep.sh
           ./scripts/test-rs-plan-gate.sh
           ./scripts/test-rs-inflight.sh
           ./scripts/test-repo-settings.sh
