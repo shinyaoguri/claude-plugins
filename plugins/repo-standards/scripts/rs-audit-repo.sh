@@ -279,9 +279,25 @@ removable_worktrees() { # → basename を 1 行ずつ
     END{if (p != "") print p"\t"b}')
 }
 
+# 既定ブランチを掴んだ linked worktree。個数・容量とは別枠で扱う — 溜まると重いのではなく、
+# 別の場所での `gh pr merge --delete-branch` を**マージ後のローカル後処理で落とす**ため
+# (fatal: 'main' is already used by worktree at ...)。マージ自体は成功するので気付きにくく、
+# 既定ブランチへの切り戻しとローカルブランチ削除だけが行われないまま残る (経緯: #114)
+default_branch_worktrees() { # → パスを 1 行ずつ
+  local base
+  base=$(git symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)
+  # 1 本目はリポジトリ本体なので外す (そこが既定ブランチを掴んでいるのは正常な状態)
+  git worktree list --porcelain 2>/dev/null | awk -v base="refs/heads/${base#origin/}" '
+    /^worktree /{ p = substr($0, 10); b = "" }
+    /^branch /  { b = substr($0, 8) }
+    /^$/        { if (p != "") { if (++n > 1 && b == base) print p } ; p = "" }
+    END         { if (p != "" && ++n > 1 && b == base) print p }
+  '
+}
+
 # 使い終わった worktree の残骸。~/.claude/ の symlink が worktree を指す事故の温床でもある
 builtin_worktrees_clean() {
-  local dirs registered orphan n linked lead
+  local dirs registered orphan n linked lead holders
   n=$(git worktree list --porcelain 2>/dev/null | grep -c '^worktree ' || echo 0)
   linked=$(( n > 0 ? n - 1 : 0 ))
   # linked worktree も置き場のディレクトリも無ければ、掃除できる残骸が存在しない。
@@ -296,6 +312,14 @@ builtin_worktrees_clean() {
   # detail の先頭へ固定で載せるだけにする。スキル側が自由文でなく本数で分岐できる
   # (経緯: claude-plugins#82)
   lead="linked worktree $linked 個"
+  # 既定ブランチを掴んだものは 1 本でも指摘する (本数・容量のしきい値より前に見る)。
+  # .claude/worktrees の外に置かれた worktree でも後処理は同じように壊れるので、
+  # 置き場のディレクトリが無い分岐よりも前に置く
+  holders=$(default_branch_worktrees | tr '\n' ' ')
+  if [ -n "${holders// /}" ]; then
+    echo "fail:$lead / 既定ブランチを掴んだ worktree: ${holders% } — 別の場所での gh pr merge --delete-branch がマージ後の後処理で落ちる。未コミットの変更が無いことを確かめて git worktree remove <path> (残すならその worktree で別ブランチへ切り替える)"
+    return
+  fi
   [ -d .claude/worktrees ] || { echo "ok:$lead (.claude/worktrees は無い)"; return; }
   registered=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}')
   orphan=""

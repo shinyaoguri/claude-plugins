@@ -444,6 +444,39 @@ else
 fi
 
 echo
+echo "builtin_worktrees_clean (既定ブランチを掴んだ worktree):"
+
+# 既定ブランチを掴んだ worktree は本数・容量のしきい値より前に、1 本でも指摘する。
+# 溜まると重いのではなく、別の場所での gh pr merge --delete-branch を
+# マージ後のローカル後処理で落とすため (経緯: #114)
+assert_detail warn "既定ブランチを掴んだ worktree" "1 本でも指摘する" \
+  bash -c 'git checkout -q -b feat/work && mkdir -p .claude/worktrees &&
+           git worktree add -q .claude/worktrees/holder main'
+
+# 復旧手順を detail に添える (指摘だけでは何をすれば戻るのか分からない)
+assert_detail warn "git worktree remove" "復旧手順を添える" \
+  bash -c 'git checkout -q -b feat/work && mkdir -p .claude/worktrees &&
+           git worktree add -q .claude/worktrees/holder main'
+
+# #109 の契約 (skip 以外の全分岐で detail 先頭に本数) はこの分岐でも守る
+assert_detail warn "linked worktree 1 個" "指摘にも本数が載る" \
+  bash -c 'git checkout -q -b feat/work && mkdir -p .claude/worktrees &&
+           git worktree add -q .claude/worktrees/holder main'
+
+# 置き場の外に切られていても後処理は同じように壊れる (.claude/worktrees の有無で見逃さない)
+assert_detail warn "既定ブランチを掴んだ worktree" ".claude/worktrees の外でも指摘する" \
+  bash -c 'git checkout -q -b feat/work && git worktree add -q ../holder-outside main'
+
+# 境界値: メインチェックアウトが既定ブランチを掴んでいるのは正常な状態
+assert_detail ok "linked worktree 1 個" "メインチェックアウトの main は指摘しない" \
+  bash -c 'git branch -q wt && mkdir -p .claude/worktrees &&
+           git worktree add -q .claude/worktrees/wt wt'
+
+# 境界値: detached な linked worktree は既定ブランチを掴んでいない
+assert_detail ok "linked worktree 1 個" "detached は指摘しない" \
+  bash -c 'mkdir -p .claude/worktrees && git worktree add -q --detach .claude/worktrees/det HEAD'
+
+echo
 echo "builtin_worktrees_clean (容量と安全に消せる候補):"
 
 # しきい値 (本体 + 3) を超える worktree を用意し、消せる / 消せないを 1 リポに揃える。
