@@ -76,7 +76,7 @@ MCP のツールは画面キャプチャ専用で、**手元のファイルを�
   1. **絶対パスで呼ぶ** — `~/.setup/bin/secret-read "$GYAZO_TOKEN_REF"`。実体はここにあるので、PATH が通っていないだけならこれで足りる。**Keychain キャッシュが効くので 1Password のロックに依存しない**
   2. setup リポジトリ自体が無い環境のときだけ `op read` へ読み替える。**1Password のロック解除が要るので、無人セッションでは承認待ちで止まる** (実際に 2 分ハングした事例がある)。最後の手段として扱う
 - **アップロードが `unauthorized`** — まず `secret-read --refresh "$GYAZO_TOKEN_REF"` を試す (Gyazo 側でトークンを作り直したのに Keychain のキャッシュが古いままだと、これで直る)。それでも通らなければトークン自体を発行し直す。https://gyazo.com/oauth/applications でアプリを登録して発行する。OAuth フローは不要で、developer ページで出せるトークン 1 本でよい
-- MCP 側での動画キャプチャは非対応 (mp4 のアップロードは Gyazo Pro / Teams のみ。GIF は B で載せる)
+- **動きは GIF で載せる。mp4 は経路が無い** (2026-08-22 実測)。MCP 側に動画キャプチャは無く、**Gyazo の Upload API は mp4 を `400 Not an Image` で拒む — Pro アカウントでも同じ**。GitHub 側も外部 URL の mp4 は貼れず、`<video>` タグは**属性ではなく要素ごと**サニタイズで消える (Markdown の `![](...)` に mp4 を渡すと camo が画像として扱い、壊れた画像になる)。GitHub が再生するのは Issue / PR へ**直接アップロード**した mp4 だけで、そこには公式 API が無いためエージェントからは扱えない
 - 上記で解決しないこのスキル自体の不具合・使いにくさは、report-issue スキルで shinyaoguri/claude-plugins へ気軽に起票する (Gyazo アプリ本体の不具合は起票せずユーザーへ報告)
 
 ## 前提
