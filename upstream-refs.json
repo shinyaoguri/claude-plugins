@@ -22,7 +22,12 @@
     "Sources/MetaphorCore/Probe/",
     "Sources/MetaphorCore/Shaders/ShaderSources/",
     "*/SketchRunner.swift",
-    "*/InputInjectionPlugin.swift"
+    "*/InputInjectionPlugin.swift",
+    "scripts/require-visual-evidence.py",
+    ".claude/skills/shots/"
+  ],
+  "shinyaoguri/p5stage": [
+    ".github/workflows/ci.yml"
   ],
   "shinyaoguri/metaphor-cli": [
     "CONTRACT.md",
