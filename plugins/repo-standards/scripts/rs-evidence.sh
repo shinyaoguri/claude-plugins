@@ -89,6 +89,57 @@ evidence_work_log_externalized() {
   find docs -maxdepth 2 -type d 2>/dev/null | sed 's/^/  dir: /' | head -10
 }
 
+# 画面を持たないリポで証跡を要求すると「関係ない指摘」として無視する習慣がつくので、
+# 判定側がまず「画面・描画を持つか」を見分けられる材料から並べる
+evidence_pr_visual_evidence() {
+  local hits
+  echo "画面・描画を持つかの手がかり:"
+  if [ -f README.md ]; then
+    echo "--- README.md (先頭 15 行) ---"
+    head -15 README.md | sed 's/^/  /'
+  else
+    echo "  README.md が無い"
+  fi
+  echo "  追跡下の画像ファイル: $(git ls-files | grep -icE '\.(png|jpe?g|gif|webp|svg)$') 件"
+  echo
+  echo "証跡を機械で回す仕組みの候補 (workflow の該当行):"
+  if [ -d .github/workflows ]; then
+    hits=$(grep -rniE 'gyazo|screenshot|visual-evidence|no-visual-change|shots' .github/workflows)
+    if [ -n "$hits" ]; then printf '%s\n' "$hits" | head -20 | sed 's/^/  /'; else echo "  該当なし"; fi
+  else
+    echo "  .github/workflows が無い"
+  fi
+  echo
+  if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    echo "直近のマージ済み PR (本文に画像があるか):"
+    # 画像そのものは取りに行かない。判定に要るのは「証跡が置かれたか」だけで、
+    # 画像を読むのはトークンが高いうえ判定を良くしない
+    gh pr list --state merged --limit 10 --json number,title,body --jq \
+      '.[] | "  #\(.number) \(.title) — 画像: " + (if ((.body // "") | test("!\\[|i\\.gyazo\\.com|user-attachments/assets|user-images\\.githubusercontent\\.com")) then "あり" else "なし" end)' \
+      2>/dev/null || echo "  (取得できず)"
+  else
+    echo "(gh が無い / 未認証のためマージ済み PR を確認できない)"
+  fi
+}
+
+# リポジトリ内が正しい置き場になる設計判断もあるので、材料は「内か外か」だけを出し、
+# 良し悪しは判定側 (と、リポが書いている理由) に委ねる
+evidence_docs_images_external() {
+  local internal external
+  internal=$(git grep -I -h -oE '!\[[^]]*\]\([^)]+\)' -- '*.md' | grep -vE '\((https?|data):')
+  external=$(git grep -I -h -oE '!\[[^]]*\]\(https?://[^)]+\)' -- '*.md')
+  if [ -z "$internal" ] && [ -z "$external" ]; then
+    echo "Markdown 本文に画像記法が無い (対象外)"
+    return
+  fi
+  echo "本文がリポジトリ内を指す画像記法 (先頭 20):"
+  if [ -n "$internal" ]; then printf '%s\n' "$internal" | head -20 | sed 's/^/  /'; else echo "  該当なし"; fi
+  echo "本文が外部 URL を指す画像記法: $(printf '%s' "$external" | grep -c . | tr -d ' ') 件"
+  echo
+  echo "追跡下の画像ファイル (先頭 20):"
+  git ls-files | grep -iE '\.(png|jpe?g|gif|webp|svg)$' | head -20 | sed 's/^/  /'
+}
+
 evidence_claude_md_quality() {
   [ -f CLAUDE.md ] || { echo "CLAUDE.md が無い (claude-md-exists 側の指摘に委ねる)"; return; }
   echo "CLAUDE.md: $(wc -l < CLAUDE.md | tr -d ' ') 行 / $(wc -c < CLAUDE.md | tr -d ' ') バイト"
