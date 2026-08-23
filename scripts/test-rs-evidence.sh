@@ -21,6 +21,18 @@ failures=0
 ok()   { echo "  [ok]   $1"; }
 fail() { echo "  [FAIL] $1"; failures=$((failures + 1)); }
 
+# stdin が UTF-8 として妥当か。**行単位で**見るのは macOS の iconv が内部バッファの
+# 境界でマルチバイトを割り、正しい UTF-8 でも Illegal byte sequence を返すため
+# (材料が 1.5KB を超えたあたりから再現する)。壊れたバイトは必ずどれかの行に載るので、
+# 行ごとに通せば検出力は落ちないまま偽陽性だけが消える
+utf8_ok() {
+  local line
+  while IFS= read -r line || [ -n "$line" ]; do
+    printf '%s' "$line" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1 || return 1
+  done
+  return 0
+}
+
 # 正本の llm 項目だけを持つ最小 manifest (id は正本と同じものを使う)
 manifest="$tmp/standards.json"
 cat > "$manifest" <<'EOF'
@@ -36,6 +48,10 @@ cat > "$manifest" <<'EOF'
       "check": { "type": "llm", "prompt": "CLAUDE.md の質を判定する" }, "why": "テスト用", "fix": "テスト用" },
     { "id": "claude-mcp-config-sane", "layer": "claude", "level": "recommended", "applies_to": ["all"],
       "check": { "type": "llm", "prompt": "MCP 設定の妥当性を判定する" }, "why": "テスト用", "fix": "テスト用" },
+    { "id": "pr-visual-evidence", "layer": "repo", "level": "recommended", "applies_to": ["all"],
+      "check": { "type": "llm", "prompt": "見た目の変更に視覚的な証跡が残っているかを判定する" }, "why": "テスト用", "fix": "テスト用" },
+    { "id": "docs-images-external", "layer": "repo", "level": "recommended", "applies_to": ["all"],
+      "check": { "type": "llm", "prompt": "ドキュメント本文の画像が外部 URL かを判定する" }, "why": "テスト用", "fix": "テスト用" },
     { "id": "future-llm-item", "layer": "repo", "level": "recommended", "applies_to": ["all"],
       "check": { "type": "llm", "prompt": "将来 setup リポ側で足される項目" }, "why": "テスト用", "fix": "テスト用" }
   ]
@@ -121,6 +137,41 @@ grep -q 'bash scripts/test.sh で回す' <<<"$out" \
   && ok "CLAUDE.md は全文を渡す (質の判定には本文が要る)" || fail "CLAUDE.md 本文が無い"
 
 echo
+echo "視覚証跡の材料 (画面を持つか / 仕組みがあるか):"
+
+vdir=$(mk_repo visual bash -c '
+  mkdir -p .github/workflows docs
+  printf "# ライブエディタ\n\n画面に絵を描くツール。\n" > README.md
+  printf "![図](docs/diagram.png)\n\n![外](https://i.gyazo.com/abc.png)\n" > docs/guide.md
+  printf "jobs:\n  shots:\n    steps:\n      - run: curl upload.gyazo.com\n" > .github/workflows/ci.yml
+  : > docs/diagram.png
+  git add -A && git commit -q -m init') || exit 1
+out=$(run "$vdir" pr-visual-evidence docs-images-external)
+
+grep -q '画面に絵を描くツール' <<<"$out" \
+  && ok "README の冒頭を渡す (画面を持つかの一次資料)" || fail "README の冒頭が無い: $out"
+grep -qE '追跡下の画像ファイル: [1-9]' <<<"$out" \
+  && ok "追跡下の画像の件数を出す" || fail "画像の件数が無い"
+grep -q 'curl upload.gyazo.com' <<<"$out" \
+  && ok "証跡を回す仕組みの候補として workflow の該当行を出す" || fail "workflow の該当行が無い"
+grep -qF '  ![図](docs/diagram.png)' <<<"$out" \
+  && ok "本文がリポジトリ内を指す画像記法をそのまま出す" || fail "内部参照の行が無い: $out"
+grep -q '本文が外部 URL を指す画像記法: 1 件' <<<"$out" \
+  && ok "外部 URL は件数だけ出す (本文を二重に持たない)" || fail "外部 URL の件数が想定と違う"
+
+# 画面を持たないリポで「材料が無い」と「集めていない」を取り違えさせない
+ndir=$(mk_repo no-visual bash -c '
+  printf "# ライブラリ\n\nテキストを整形する。\n" > README.md
+  git add -A && git commit -q -m init') || exit 1
+out=$(run "$ndir" pr-visual-evidence docs-images-external)
+grep -q '追跡下の画像ファイル: 0 件' <<<"$out" \
+  && ok "画像が無いリポは 0 件と明示する" || fail "画像 0 件の明示が無い"
+grep -q '\.github/workflows が無い' <<<"$out" \
+  && ok "workflow が無ければ「無い」と書く" || fail "workflow 不在の明示が無い"
+grep -q 'Markdown 本文に画像記法が無い (対象外)' <<<"$out" \
+  && ok "本文に画像が無ければ「対象外」と書く" || fail "画像記法不在の扱いが曖昧: $out"
+
+echo
 echo "正本とのずれで落ちない:"
 
 out=$(run "$dir" future-llm-item); code=$?
@@ -141,13 +192,13 @@ echo
 echo "出力の健全性:"
 
 out=$(run "$dir")
-if printf '%s' "$out" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1; then
+if utf8_ok <<<"$out"; then
   ok "UTF-8 として妥当 (バイト単位の切り詰めで日本語を割っていない)"
 else
   fail "UTF-8 が壊れている"
 fi
 n=$(grep -c '^### ' <<<"$out")
-[ "$n" -eq 5 ] && ok "manifest の llm 項目ぶんだけブロックを出す (5 件)" \
+[ "$n" -eq 7 ] && ok "manifest の llm 項目ぶんだけブロックを出す (7 件)" \
   || fail "ブロック数が想定外 → $n"
 
 echo
@@ -173,7 +224,7 @@ grep -q '  .github/repo-settings.json' <<<"$out" \
 # README 全文まで渡すと材料が肥大する。意図は見出しで足りる
 grep -q '^## 使い方$' <<<"$out" && ok "README は見出しだけ渡す" || fail "README の見出しが無い"
 
-if printf '%s' "$out" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1; then
+if utf8_ok <<<"$out"; then
   ok "UTF-8 として妥当"
 else
   fail "UTF-8 が壊れている"
