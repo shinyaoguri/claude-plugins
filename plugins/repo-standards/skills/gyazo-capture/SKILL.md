@@ -1,6 +1,6 @@
 ---
 name: gyazo-capture
-description: "GUI を伴う作業 (画面・見た目・動き・操作手順) を Issue・PR に記録するとき、スクリーンショットやアニメーション WebP を Gyazo にアップロードして URL を得る (リポジトリに画像をコミットしないため)。Use when a screenshot, animated WebP or GIF, or other visual evidence needs to be attached to a GitHub issue or pull request."
+description: "GUI を伴う作業 (画面・見た目・動き・操作手順) を Issue・PR に記録するとき、スクリーンショットやアニメーション WebP を Gyazo にアップロードして URL を得る (リポジトリに画像をコミットしないため)。ドキュメント本文に載り続ける画像の作法 (台帳・追記型・鮮度検査) と、証跡を CI で回す形も扱う。Use when a screenshot, animated WebP or GIF, or other visual evidence needs to be attached to a GitHub issue or pull request, when README or docs embed images, or when setting up CI that captures or requires visual evidence."
 allowed-tools: "mcp__gyazo-mac__gyazo_list_capturable_windows, mcp__gyazo-mac__gyazo_get_captured_image"
 ---
 
@@ -9,6 +9,7 @@ allowed-tools: "mcp__gyazo-mac__gyazo_list_capturable_windows, mcp__gyazo-mac__g
 - **見た目が変わる / 見た目を説明する** → 静止画。画面そのものは A で撮る
 - **動きが分からないと正誤を判定できない** (アニメーション・遷移・ドラッグ等のインタラクション・時間依存の描画・進行してはじめて出る不具合) → **静止画に加えてアニメーション WebP**。B で載せる
 - 動きは静止画の置き換えではなく**併載**。差分の精査は静止画の方が向く
+- **その PR / Issue でだけ見せる**なら A・B。**ドキュメント本文に載り続ける**なら C (作法が違う)。証跡を運任せにせず回し続けるなら D
 
 ## A. 画面を撮る (MCP)
 
@@ -73,6 +74,32 @@ MCP のツールは画面キャプチャ専用で、**手元のファイルを�
    撮影範囲: `metaphor watch` 実行中のスケッチウィンドウのみ (他アプリ・通知は含まない)。
    意図: ドラッグ開始からグリッドにスナップするまでの約 4 秒。カーソル追従が 1 フレーム遅れる点を見てほしい。
    ```
+
+## C. ドキュメント本文に載り続ける画像
+
+B との違いは**寿命**。README・docs・チュートリアルに載り続けるものは、貼って終わりにせず次の 3 つを持たせる。
+
+1. **アセットは不変・追記型**。撮り直しは新規アップロード + URL 更新で、古い URL は消さない (過去のリビジョンを開けば当時の絵が出る)
+2. **台帳を持つ** (`manifest.json` 等)。何を・どのソースから撮ったかを記録し、**本文の画像行は撮影スクリプトが書き戻す** — 手で URL を書くと、撮り直しのたびに本文と画像の対応が腐る
+3. **鮮度検査を入れる**。台帳へ撮影時のソースの指紋を残し、現在のソースと突き合わせると「コードを変えたのに撮り直していない」を機械で捕まえられる。**画像そのものは比較しない**ので、GPU も撮影環境も要らない CI で走る
+
+**リポジトリ内が正しい置き場になることもある** — 実行結果画像が回帰検出の資産を兼ねる、配布物やアプリのアセットである、など。そのときは**理由を CLAUDE.md か ADR に書く** (書いていないと、次の監査で「外部化していない」と指摘され続ける)。
+
+実例は metaphor の `.claude/skills/shots/` (DocC リファレンス / チュートリアル / Examples の 3 用途。Examples だけリポジトリ内に置く判断とその理由まで書かれている)。
+
+## D. 仕組みにする
+
+証跡は「気付いた人が貼る」運用だと必ず抜ける。**squash merge ではブランチが消え、PR 本文が唯一の記録**になり、マージ後には足せない。リポの性質に合う方を CI へ入れる。
+
+**a. 撮れるものは CI に撮らせる** (E2E があるリポ)。E2E が画面を撮り、CI が Gyazo へ上げて PR にコメントする。何を撮ったかの対応表は spec 側の manifest に持たせ、二重に持たない。トークンはリポジトリシークレット (`GYAZO_ACCESS_TOKEN`)、**無ければ黙って省いて CI は止めない** — 証跡は在れば助かるもので、無いことが CI を止める理由にはならない (fork からの PR にはシークレットが渡らないので、この分岐は必ず要る)。実例は p5stage の `.github/workflows/ci.yml`
+
+**b. 撮れないものは、証跡が無いことを落とす** (手元でしか撮れないリポ)。見た目に効くパスを触った PR の本文に画像が 1 枚も無ければ落とす。要点は 3 つ:
+
+- **対象パスは実績で決める**。過去の PR を「絵が変わった / 変わらなかった」で仕分け、*たいてい*変わるディレクトリだけを載せる。「変わり*うる*」まで広げると、ラベルで素通しする習慣がつく
+- **逃げ道はラベルにする** (`no-visual-change`)。「本当に絵は変わらない」という判断が PR に残る。無言で通せる逃げ道は作らない
+- **必須ジョブの中に置く**。auto-merge は必須チェックが緑になった瞬間にマージするので、必須でないジョブが赤くても誰も見ない
+
+実例は metaphor の `scripts/require-visual-evidence.py` (標準ライブラリのみ。本文とラベルは実行時に API から読むので、直した後は `gh run rerun --failed <run-id>` だけで通り push が要らない)。
 
 ## 守ること
 
