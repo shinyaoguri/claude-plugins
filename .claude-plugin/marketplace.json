@@ -8,29 +8,6 @@
   },
   "plugins": [
     {
-      "name": "metaphor-sketch",
-      "source": "./plugins/metaphor-sketch",
-      "description": "metaphor (Swift + Metal クリエイティブコーディング) でスケッチを書く人向け。watch→AI クライアントの起動順序、observe→edit→verify ループ、llms.txt/examples-index の部分参照、環境診断。ライブラリ内の MetaphorPlugin 機構とは無関係。",
-      "keywords": [
-        "metaphor",
-        "creative-coding",
-        "swift",
-        "metal",
-        "mcp"
-      ]
-    },
-    {
-      "name": "metaphor-contrib",
-      "source": "./plugins/metaphor-contrib",
-      "description": "shinyaoguri/metaphor と metaphor-cli にコントリビュートする人向け。クロスリポ契約ガード、生成物の鮮度、リリース規約、CLI 拡張手順への薄いルーター。",
-      "keywords": [
-        "metaphor",
-        "contract",
-        "release",
-        "maintainer"
-      ]
-    },
-    {
       "name": "repo-standards",
       "source": "./plugins/repo-standards",
       "description": "個人の開発運用標準 — リポジトリ構成・GitHub 設定・マシンの Claude 環境を正本 (shinyaoguri/setup の repo-standards.json) と突き合わせて監査・修正・雛形生成し、作業の記録 (Issue・PR へのスクリーンショット添付、気付きの起票) を標準どおりの手順で行う。/repo-audit /env-doctor /repo-bootstrap /gyazo-capture /report-issue。",
