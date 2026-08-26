@@ -19,9 +19,10 @@ fail=0
 # .ya?ml は個別列挙せず総称で拾う (ansible の playbook・Issue テンプレート・ワークフローと
 # 種類が増え続けるため。誤爆したら ignore_re 側で落とす)
 token_re='(CONTRACT\.md|AGENTS\.md|DEVELOPMENT\.md|CLAUDE\.md|llms[a-z-]*\.txt|examples-index\.(md|json)|docs/ai/[A-Za-z0-9._/-]+|docs/[a-z-]+\.md|scripts/[A-Za-z0-9_-]+\.sh|check-contract[a-z-]*\.sh|[A-Za-z][A-Za-z0-9]*\.swift|[a-z.-]+\.schema\.json|templates\.json|[A-Za-z0-9_.-]+\.ya?ml|ShaderSources|Shaders/Metal)'
-# metaphor new が各プロジェクトに生成するファイル等、上流リポの実体ではないトークンと、
+# 上流リポの実体ではなく一般名詞として本文に現れるトークン (marker ファイルや生成物の例示。
+# metaphor 系プラグインの撤去で、これらを上流の実体として指す参照は無くなった) と、
 # プラグイン同梱スクリプト (rs- プレフィックス。repo-standards の ${CLAUDE_PLUGIN_ROOT}/scripts/)
-ignore_re='^(PROJECT_BRIEF\.md|App\.swift|scripts/rs-[a-z-]+\.sh)$'
+ignore_re='^(Package\.swift|llms\.txt|scripts/rs-[a-z-]+\.sh)$'
 
 # 同梱ファイル (plugins/ 配下に実体があるもの) は定義上「上流リポへの参照」ではないので
 # マニフェスト登録を求めない。ignore_re の列挙を増やさずに済ませるための一般則で、
