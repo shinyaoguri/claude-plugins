@@ -1,6 +1,6 @@
 # 0016: エージェントの振る舞いを縛るフックは、リポにコミットせずプラグインが供給する
 
-- **状態**: 採用 (2026-08-10, Issue [#86](https://github.com/shinyaoguri/claude-plugins/issues/86) の判断)
+- **状態**: 採用 (2026-08-10, Issue [#86](https://github.com/shinyaoguri/claude-plugins/issues/86) の判断。適用範囲は 2026-08-31 に [0021](0021-three-layer-placement.md) 決定 2 が狭めた — プラグインが供給するのは、リポジトリが要求しない支援に限る)
 
 - **文脈**: 「push した PR の CI が赤いままセッションを終えられない」フック (ci-watch) を [metaphor](https://github.com/shinyaoguri/metaphor) と [metaphor-cli](https://github.com/shinyaoguri/metaphor-cli) の各リポへコピーして実地投入し、機能することを確認した ([metaphor#450](https://github.com/shinyaoguri/metaphor/pull/450) / [metaphor-cli#104](https://github.com/shinyaoguri/metaphor-cli/pull/104))。これを個人標準へ採り込むにあたり、配り方が [#86](https://github.com/shinyaoguri/claude-plugins/issues/86) の論点として残った。当初の候補は (1) 各リポへコピー、(2) プロジェクトの `.claude/settings.json` から `${CLAUDE_PLUGIN_ROOT}` を参照、(3) プラグイン同梱 + `repo-bootstrap` が雛形をコピー。
 
