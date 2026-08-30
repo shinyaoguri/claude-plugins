@@ -117,11 +117,13 @@ failed=$(printf '%s' "$pr" | jq -r '
        or ((.state // "") | test("^(FAILURE|ERROR)$")))
    | "- \(.name // .context // "check") — \(.detailsUrl // .targetUrl // "")"]
   | join("\n")')
+# 実行中と数えるのは CheckRun (Actions が作るもの) だけにする。**commit status の
+# PENDING は「走っている」を意味しない** — 人間の操作待ちをそれで表す設計があり
+# (mokume の human-approval)、待っても永久に解けずこの hook が詰む (#149 で実測)。
+# 赤の検出は上の failed が CheckRun と StatusContext の両方を見るので落ちない。
 pending=$(printf '%s' "$pr" | jq -r '
   [.statusCheckRollup[]?
-   | select(
-       ((.status // "") | test("^(QUEUED|IN_PROGRESS|PENDING|WAITING)$"))
-       or ((.state // "") | test("^PENDING$")))]
+   | select((.status // "") | test("^(QUEUED|IN_PROGRESS|PENDING|WAITING)$"))]
   | length')
 
 if [ -n "$failed" ]; then
