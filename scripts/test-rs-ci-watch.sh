@@ -86,6 +86,8 @@ green='{"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion"
 red='{"__typename":"CheckRun","name":"build-and-test","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://example.com/job/42"}'
 running='{"__typename":"CheckRun","name":"build","status":"IN_PROGRESS","conclusion":null,"detailsUrl":"u"}'
 red_context='{"__typename":"StatusContext","context":"legacy","state":"FAILURE","targetUrl":"u"}'
+# 人間の操作待ちを表す commit status。走っているものが無いので、待っても解けない
+waiting_context='{"__typename":"StatusContext","context":"human-approval","state":"PENDING","targetUrl":"u"}'
 
 echo "ci-watch-stop.sh (Stop hook: 赤いまま終わらせない):"
 
@@ -137,6 +139,13 @@ check "  マージのために戻る必要が無いと伝える" 0 \
 
 put_marker 0 6
 check "待機 6 回で打ち切る" 0 "$(run_stop)"
+
+# 承認待ちを commit status の PENDING で表す設計がある (mokume の human-approval)。
+# 走っているものは無いので、実行中と数えると永久に終われない (#149)
+put_marker
+rollup "$(open_pr "$green,$waiting_context" shinyaoguri "$auto_merge_on")"
+check "人の操作待ちの commit status → 実行中と数えない" 0 "$(run_stop)"
+check "  終われるので印を消す" absent "$(marker_state)"
 
 put_marker
 rollup "$(open_pr "$green")"
