@@ -1,6 +1,6 @@
 # 0020: 汎用スキルは plugin として配り、グローバルスキルは使わない
 
-- **状態**: 採用 (2026-08-16)
+- **状態**: 採用 (2026-08-16。決定 2 の判定基準は 2026-08-31 に [0021](0021-three-layer-placement.md) 決定 1 が置き換えた — 供給できるかどうかではなく、どこで発火する必要があるかで決まる)
 
 - **文脈**: 「スキルは自分しか使わないのだから、marketplace のプラグインではなく [setup](https://github.com/shinyaoguri/setup) リポのグローバルスキル (`~/.claude/skills/`) として管理したほうが楽ではないか」という問いが出た。marketplace 運用には version bump・[upstream-refs.json](../../upstream-refs.json) の網羅検査・ADR といった手続きが伴う一方、setup リポは `~/.claude` への symlink なので `git pull` だけで全マシンへ反映される。
 
