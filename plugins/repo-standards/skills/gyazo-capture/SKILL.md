@@ -116,7 +116,11 @@ B との違いは**寿命**。README・docs・チュートリアルに載り続�
 - **`No windows found`** — Gyazo Menu.app と MCP サーバーが両方起動していても返ることがある。macOS の画面収録の許可が MCP サーバーに無いのが原因。システム設定 > プライバシーとセキュリティ > 画面収録 で Gyazo を確認する。**許可の付与は GUI 操作なので代行せず、ユーザーへ依頼する**
 - **取得結果が空 / 「まだ完了していない」旨が返る** — アップロードが未完了なだけ。**間隔を空けて**もう一度呼ぶ (画像が返るコストがあるので連打しない)。**`gyazo_list_capturable_windows` がウィンドウを返せている = 画面収録の許可は足りている**ので、ここで権限を疑わない (許可が無ければ上の `No windows found` が返る)。数分待っても返らないときは回線の遅さを疑い、ユーザーへ**権限ではなく状況**を伝える
 - **`isn't a vault in this account`** — vault 名かアイテム名の間違い。`op vault list` / `op item list --vault <name>` で実体を確かめる (値は表示しない)
-- **`secret-read: command not found`** — setup リポジトリの `bin/` が PATH に無い。恒久対処は `ansible-playbook playbook_sillicon_mac.yml --tags zshrc` で symlink を張り直すこと (個人環境では zshenv が PATH を通す)。その場で続けたいときは順に:
+- **`secret-read: command not found`** — setup リポジトリの `bin/` が PATH に無い。原因は `echo "$GYAZO_TOKEN_REF"` の結果で分かれる:
+  - **参照は入っているのに PATH にだけ無い** — Claude デスクトップアプリが、zshenv を張る前 (または変える前) の PATH を持ち続けている。アプリは起動時の PATH を保持し、Bash ツールのシェルスナップショットが zshenv の後でそれを書き戻すので、変数は届いても PATH の追加だけが消える (setup#154)。symlink を張り直しても直らない。**恒久対処はアプリの再起動**で、セッションが落ちるのでユーザーへ依頼する
+  - **参照も空** — zshenv 自体が読まれていない。`ansible-playbook playbook_sillicon_mac.yml --tags zshrc` で symlink を張り直す
+
+  どちらでも、その場で続けたいときは順に:
   1. **絶対パスで呼ぶ** — `~/.setup/bin/secret-read "$GYAZO_TOKEN_REF"`。実体はここにあるので、PATH が通っていないだけならこれで足りる。**Keychain キャッシュが効くので 1Password のロックに依存しない**
   2. setup リポジトリ自体が無い環境のときだけ `op read` へ読み替える。**1Password のロック解除が要るので、無人セッションでは承認待ちで止まる** (実際に 2 分ハングした事例がある)。最後の手段として扱う
 - **アップロードが `unauthorized`** — まず `secret-read --refresh "$GYAZO_TOKEN_REF"` を試す (Gyazo 側でトークンを作り直したのに Keychain のキャッシュが古いままだと、これで直る)。それでも通らなければトークン自体を発行し直す。https://gyazo.com/oauth/applications でアプリを登録して発行する。OAuth フローは不要で、developer ページで出せるトークン 1 本でよい
