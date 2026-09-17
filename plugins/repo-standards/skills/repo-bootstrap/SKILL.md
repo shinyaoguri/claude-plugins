@@ -11,18 +11,19 @@ allowed-tools: "Bash(jq:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-git
 
 ## 手順
 
-1. 正本を読み、リポ種別を決める。`--kind` 指定が無ければ選択肢を提示して 1 問だけ聞く:
+1. 正本を読み、リポ種別を決める。`--kind` 指定が無ければ marker ファイル (`Package.swift` → swift / `package.json` → web / `pyproject.toml` → python / どれも無ければ generic) から判定し、判断が付かないときだけ 1 問聞く:
 
    ```bash
-   jq -r '.kinds[].id' ${CLAUDE_PLUGIN_ROOT}/repo-standards.json    # 種別の選択肢 (正本から動的に取得)
+   jq -r '.items | length' ${CLAUDE_PLUGIN_ROOT}/repo-standards.json    # 正本が読めることの確認
    ```
 
    正本はプラグイン同梱なので、解決できないのは配布が壊れている状態。`/plugin update repo-standards@shinyaoguri` を案内して終了する
-2. `level: required` の全項目と、該当種別に適用される `recommended` 項目を列挙し、生成するファイル一覧 (`.gitignore`・README.md・CLAUDE.md・CI・テンプレート等) を提示して確認を取る:
+
+   種別は生成物の中身 (`.gitignore` の書き方・テストディレクトリの命名・CI の検証コマンド) を決めるために使う。**どの項目を生成するかは種別で変わらない** — 標準の項目はすべての種別に当たる (ADR 0023)
+2. `level: required` の全項目と `recommended` 項目を列挙し、生成するファイル一覧 (`.gitignore`・README.md・CLAUDE.md・CI・テンプレート等) を提示して確認を取る:
 
    ```bash
-   jq -r --arg k <kind> '.items[] | select(.applies_to | index("all") or index($k))
-     | select(.level != "rejected") | [.level, .id, .fix // ""] | @tsv' ${CLAUDE_PLUGIN_ROOT}/repo-standards.json
+   jq -r '.items[] | select(.level != "rejected") | [.level, .id, .fix // ""] | @tsv' ${CLAUDE_PLUGIN_ROOT}/repo-standards.json
    ```
 
    **生成に要る材料もこのとき 1 回でまとめて聞く** — リポの目的 (README の 1 行)、検証コマンド (CLAUDE.md と CI に載る)、LICENSE (既定は MIT)。marker ファイルすら無い段階なのでリポから読めるものはほぼ無く、聞かずに書くと見出しだけの雛形になる。答えが得られなかった項目は生成せず、後から /repo-audit-fix で埋める

@@ -28,25 +28,24 @@ manifest="$tmp/standards.json"
 cat > "$manifest" <<'EOF'
 {
   "version": 1,
-  "kinds": [{ "id": "generic", "marker": null }],
   "items": [
-    { "id": "ok-item", "layer": "repo", "level": "required", "applies_to": ["all"],
+    { "id": "ok-item", "layer": "repo", "level": "required",
       "check": { "type": "file_exists", "path": "README.md" },
       "why": "テスト用", "fix": "テスト用" },
-    { "id": "ng-item", "layer": "repo", "level": "required", "applies_to": ["all"],
+    { "id": "ng-item", "layer": "repo", "level": "required",
       "check": { "type": "file_exists", "path": "MISSING.md" },
       "why": "この理由文はわざと長くしてある。切り詰め幅の境界を越えさせて末尾に省略記号が付くことを確かめるための文字数稼ぎである。",
       "fix": "テスト用" },
-    { "id": "warn-item", "layer": "repo", "level": "recommended", "applies_to": ["all"],
+    { "id": "warn-item", "layer": "repo", "level": "recommended",
       "check": { "type": "file_exists", "path": "MISSING2.md" },
       "why": "テスト用", "fix": "テスト用" },
-    { "id": "skip-item", "layer": "repo", "level": "required", "applies_to": ["swift"],
-      "check": { "type": "file_exists", "path": "MISSING3.md" },
+    { "id": "skip-item", "layer": "repo", "level": "required",
+      "check": { "type": "builtin", "name": "not_implemented_on_purpose" },
       "why": "テスト用", "fix": "テスト用" },
-    { "id": "manual-item", "layer": "claude", "level": "required", "applies_to": ["all"],
+    { "id": "manual-item", "layer": "claude", "level": "required",
       "check": { "type": "llm", "prompt": "テスト用の LLM 判定プロンプト" },
       "why": "テスト用", "fix": "テスト用" },
-    { "id": "gh-item", "layer": "github", "level": "required", "applies_to": ["all"],
+    { "id": "gh-item", "layer": "github", "level": "required",
       "check": { "type": "gh_api", "path": "has_wiki", "expect": false },
       "why": "テスト用", "fix": "テスト用" }
   ]
@@ -136,12 +135,11 @@ manifest_b="$tmp/standards-blocked.json"
 cat > "$manifest_b" <<'EOF'
 {
   "version": 1,
-  "kinds": [{ "id": "generic", "marker": null }],
   "items": [
-    { "id": "blocked-required", "layer": "repo", "level": "required", "applies_to": ["all"],
+    { "id": "blocked-required", "layer": "repo", "level": "required",
       "check": { "type": "builtin", "name": "gitignore_covers_env" },
       "why": "テスト用", "fix": "テスト用" },
-    { "id": "blocked-recommended", "layer": "repo", "level": "recommended", "applies_to": ["all"],
+    { "id": "blocked-recommended", "layer": "repo", "level": "recommended",
       "check": { "type": "builtin", "name": "scheduled_workflow_exists" },
       "why": "テスト用", "fix": "テスト用" }
   ]

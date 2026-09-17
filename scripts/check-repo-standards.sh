@@ -62,15 +62,14 @@ EVIDENCE_MAX_AGE_DAYS="${EVIDENCE_MAX_AGE_DAYS:-180}"
 assert_empty "version が 1" \
   "$common_defs"'if .version == 1 then empty else "version=\(.version)" end'
 
-assert_empty "kind id が重複していない" \
-  "$common_defs"'[.kinds[].id] | group_by(.) | map(select(length > 1)) | .[] | "重複: \(.[0])"'
-
-# marker: null の kind が無いと、どの marker にも合致しないリポの kind が決まらない
-assert_empty "フォールバック用の marker: null な kind がある" \
-  "$common_defs"'if ([.kinds[] | select(.marker == null)] | length) > 0 then empty else "marker: null な kind が無い" end'
-
 assert_empty "item id が重複していない" \
   "$common_defs"'[.items[].id] | group_by(.) | map(select(length > 1)) | .[] | "重複: \(.[0])"'
+
+# kinds / applies_to は一度も項目を除外しないまま残っていた抽象で、ADR 0023 で畳んだ。
+# 種別ごとの差は消費側 (rs-audit-repo.sh) が持ち、条件付けが要るなら when を使う
+assert_empty "畳んだ抽象 (kinds / applies_to) が戻っていない" \
+  "$common_defs"'(if has("kinds") then "トップレベルに kinds がある (ADR 0023 で削除済み)" else empty end),
+   (.items[] | select(has("applies_to")) | "\(.id): applies_to がある (ADR 0023 で削除済み)")'
 
 assert_empty "layer / level / check.type が enum に収まる" \
   "$common_defs"'.items[] | . as $i
@@ -87,11 +86,6 @@ assert_empty "check.type ごとの必須フィールドが揃っている" \
 assert_empty "check の必須フィールドが空でない" \
   "$common_defs"'.items[] | . as $i | (required_fields[$i.check.type] // []) as $req
    | $req[] | . as $f | select(($i.check | has($f)) and ($i.check[$f] | blank)) | "\($i.id): check.\($f) が空"'
-
-assert_empty "applies_to が空でなく、定義済みの kind に解決する" \
-  "$common_defs"'([.kinds[].id] + ["all"]) as $known | .items[] | . as $i
-   | (if (($i.applies_to // []) | length) == 0 then "\($i.id): applies_to が空" else empty end),
-     ($i.applies_to[]? | . as $t | select(($known | index($t)) == null) | "\($i.id): 未定義の kind \($t)")'
 
 assert_empty "when は visibility のみ、値は public / private" \
   "$common_defs"'.items[] | select(has("when")) | . as $i
