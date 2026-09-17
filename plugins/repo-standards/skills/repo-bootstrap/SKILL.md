@@ -20,10 +20,10 @@ allowed-tools: "Bash(jq:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-git
    正本はプラグイン同梱なので、解決できないのは配布が壊れている状態。`/plugin update repo-standards@shinyaoguri` を案内して終了する
 
    種別は生成物の中身 (`.gitignore` の書き方・テストディレクトリの命名・CI の検証コマンド) を決めるために使う。**どの項目を生成するかは種別で変わらない** — 標準の項目はすべての種別に当たる (ADR 0023)
-2. `level: required` の全項目と `recommended` 項目を列挙し、生成するファイル一覧 (`.gitignore`・README.md・CLAUDE.md・CI・テンプレート等) を提示して確認を取る:
+2. `cadence: bootstrap` の項目 (設置すれば終わるもの。雛形生成が担当する側) を level 順に列挙し、生成するファイル一覧 (`.gitignore`・README.md・CLAUDE.md・CI・テンプレート等) を提示して確認を取る:
 
    ```bash
-   jq -r '.items[] | [.level, .id, .fix // ""] | @tsv' ${CLAUDE_PLUGIN_ROOT}/repo-standards.json
+   jq -r '.items[] | select(.cadence == "bootstrap") | [.level, .id, .fix // ""] | @tsv' ${CLAUDE_PLUGIN_ROOT}/repo-standards.json
    ```
 
    **生成に要る材料もこのとき 1 回でまとめて聞く** — リポの目的 (README の 1 行)、検証コマンド (CLAUDE.md と CI に載る)、LICENSE (既定は MIT)。marker ファイルすら無い段階なのでリポから読めるものはほぼ無く、聞かずに書くと見出しだけの雛形になる。答えが得られなかった項目は生成せず、後から /repo-audit-fix で埋める
