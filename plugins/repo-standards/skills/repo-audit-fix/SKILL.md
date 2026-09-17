@@ -57,7 +57,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh summary
 
    **機械判定を LLM 判定が覆した項目** (`status` が ng / warn なのに `verdict` が ok / skip) は fix を当てる対象ではない。機械判定が偽陽性だったという判定なので、`evidence` の根拠をそのまま `--note` に引いて `rejected` に落とし、一覧には「機械判定の偽陽性」として並べる。**`status` は覆らない**ため、記録しないまま放置すると次のセッションで同じ確認をやり直すことになる。判定に納得できなければ `rejected` にせず repo-audit で判定し直す
 
-   `conflicts` の項目をユーザーが「やはり直さない」と決めたら `rejected` に、標準の側を見直すべきだと判断したら**その理由を setup リポ (`claude/repo-standards.json`) の Issue へ持っていく** — 個別リポの逸脱が積み重なるなら、直すべきは標準の方かもしれない
+   `conflicts` の項目をユーザーが「やはり直さない」と決めたら `rejected` に、標準の側を見直すべきだと判断したら**その理由を claude-plugins (`plugins/repo-standards/repo-standards.json`) の Issue へ持っていく** — 個別リポの逸脱が積み重なるなら、直すべきは標準の方かもしれない
 
    GitHub 設定 (`layer: github`) の扱い:
    - `.github/repo-settings.json` があるリポでは**群 1 に含める** — gh コマンドで直接変えず、定義ファイルの変更として PR に載せ、マージ後にそのリポの手順で適用する (変更の根拠が diff に残る)
@@ -128,6 +128,6 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh summary
 ## 詳細の在処
 
 - findings の保存先・行スキーマ・decision の意味: `${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh` 冒頭のコメント
-- 各項目の根拠 (`why`) と fix の正本: `~/.claude/repo-standards.json` (実体は shinyaoguri/setup の claude/repo-standards.json)
+- 各項目の根拠 (`why`) と fix の正本: `${CLAUDE_PLUGIN_ROOT}/repo-standards.json` (プラグイン同梱。ADR 0022)
 
 このスキル自体の不具合・使いにくさに気付いたら、report-issue スキルで shinyaoguri/claude-plugins へ気軽に起票する。

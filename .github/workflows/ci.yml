@@ -39,6 +39,8 @@ jobs:
         run: ./scripts/check-deprecated-patterns.sh
       - name: 上流参照のマニフェスト網羅 (upstream-refs.json)
         run: ./scripts/check-upstream-refs.sh --coverage
+      - name: 判定基準の正本のスキーマ検査 (repo-standards.json)
+        run: ./scripts/check-repo-standards.sh
       - name: 同梱スクリプトの判定テスト
         run: |
           ./scripts/test-rs-audit-repo.sh

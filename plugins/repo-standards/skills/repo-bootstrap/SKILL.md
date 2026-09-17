@@ -1,6 +1,6 @@
 ---
 name: repo-bootstrap
-description: "新規リポジトリを個人標準 (setup リポの repo-standards.json) どおりに対話的に雛形生成する。構成ファイルの生成 → 初回コミット → GitHub 作成と設定適用まで。Use when creating a new repository or initializing an existing directory to personal standards."
+description: "新規リポジトリを個人標準 (repo-standards.json) どおりに対話的に雛形生成する。構成ファイルの生成 → 初回コミット → GitHub 作成と設定適用まで。Use when creating a new repository or initializing an existing directory to personal standards."
 argument-hint: "[path] [--kind <swift|web|python|generic>]"
 allowed-tools: "Bash(jq:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-github.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-min.sh:*)"
 ---
@@ -14,15 +14,15 @@ allowed-tools: "Bash(jq:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-git
 1. 正本を読み、リポ種別を決める。`--kind` 指定が無ければ選択肢を提示して 1 問だけ聞く:
 
    ```bash
-   jq -r '.kinds[].id' ~/.claude/repo-standards.json    # 種別の選択肢 (正本から動的に取得)
+   jq -r '.kinds[].id' ${CLAUDE_PLUGIN_ROOT}/repo-standards.json    # 種別の選択肢 (正本から動的に取得)
    ```
 
-   正本が無ければ setup リポのセットアップ (`ansible-playbook --tags claude`) を案内して終了する
+   正本はプラグイン同梱なので、解決できないのは配布が壊れている状態。`/plugin update repo-standards@shinyaoguri` を案内して終了する
 2. `level: required` の全項目と、該当種別に適用される `recommended` 項目を列挙し、生成するファイル一覧 (`.gitignore`・README.md・CLAUDE.md・CI・テンプレート等) を提示して確認を取る:
 
    ```bash
    jq -r --arg k <kind> '.items[] | select(.applies_to | index("all") or index($k))
-     | select(.level != "rejected") | [.level, .id, .fix // ""] | @tsv' ~/.claude/repo-standards.json
+     | select(.level != "rejected") | [.level, .id, .fix // ""] | @tsv' ${CLAUDE_PLUGIN_ROOT}/repo-standards.json
    ```
 
    **生成に要る材料もこのとき 1 回でまとめて聞く** — リポの目的 (README の 1 行)、検証コマンド (CLAUDE.md と CI に載る)、LICENSE (既定は MIT)。marker ファイルすら無い段階なのでリポから読めるものはほぼ無く、聞かずに書くと見出しだけの雛形になる。答えが得られなかった項目は生成せず、後から /repo-audit-fix で埋める
@@ -44,7 +44,7 @@ allowed-tools: "Bash(jq:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-git
 
 ## 詳細の在処
 
-- チェックリストの正本と各項目の生成方針 (`fix`): `~/.claude/repo-standards.json` (実体は shinyaoguri/setup の claude/repo-standards.json)
+- チェックリストの正本と各項目の生成方針 (`fix`): `${CLAUDE_PLUGIN_ROOT}/repo-standards.json` (プラグイン同梱。ADR 0022)
 - CLAUDE.md に書くべき内容の判断基準: 正本の `claude-md-quality` 項目の prompt
 
 このスキル自体の不具合・使いにくさに気付いたら、report-issue スキルで shinyaoguri/claude-plugins へ気軽に起票する。

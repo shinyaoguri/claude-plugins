@@ -1,6 +1,6 @@
 ---
 name: repo-audit-min
-description: "cwd のリポジトリを個人標準 (setup リポの repo-standards.json) と突き合わせる低コストな監査。機械判定を圧縮して報告し、LLM 判定は材料をスクリプトで集めてから安いモデル 1 本に一括で任せる。求められれば判定を暫定値として findings に残し修正フローへ渡す。Use for a cheap repository standards check, as a pre-flight before the full repo-audit, or when checking many repositories in a row."
+description: "cwd のリポジトリを個人標準 (repo-standards.json) と突き合わせる低コストな監査。機械判定を圧縮して報告し、LLM 判定は材料をスクリプトで集めてから安いモデル 1 本に一括で任せる。求められれば判定を暫定値として findings に残し修正フローへ渡す。Use for a cheap repository standards check, as a pre-flight before the full repo-audit, or when checking many repositories in a row."
 allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-min.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-evidence.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh:*)"
 ---
 
@@ -61,6 +61,6 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
 - **反証・衝突判定をしない**。この 2 つは本監査の作法で、暫定判定は反証待ちにも数えない
 - **修正の提案・適用をしない**。逸脱の指摘までで止める (修正は repo-audit-fix の担当)
 
-これらが要るなら repo-audit スキル (本監査) を使う。判定項目そのものの正本は `~/.claude/repo-standards.json` で、項目の追加・変更はプラグインでなく setup リポへの PR で行う。判定の出自と上書き規則は [ADR 0015](https://github.com/shinyaoguri/claude-plugins/blob/main/docs/decisions/0015-verdict-provenance.md)。
+これらが要るなら repo-audit スキル (本監査) を使う。判定項目そのものの正本は `${CLAUDE_PLUGIN_ROOT}/repo-standards.json` で、項目の追加・変更はこのリポジトリへの PR で行う (ADR 0022)。判定の出自と上書き規則は [ADR 0015](https://github.com/shinyaoguri/claude-plugins/blob/main/docs/decisions/0015-verdict-provenance.md)。
 
 このスキル自体の不具合・使いにくさに気付いたら、report-issue スキルで shinyaoguri/claude-plugins へ気軽に起票する。

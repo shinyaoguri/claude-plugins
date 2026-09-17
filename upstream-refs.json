@@ -3,7 +3,6 @@
     ".github/workflows/ci.yml"
   ],
   "shinyaoguri/setup": [
-    "claude/repo-standards.json",
     "claude/CLAUDE.md",
     "claude/settings.json",
     "tasks/claude.yml",

@@ -1,6 +1,6 @@
 ---
 name: repo-audit
-description: "cwd のリポジトリを個人標準 (setup リポの repo-standards.json) と突き合わせて精度優先で監査する。GitHub 設定・リポ構成ファイル・.claude 設定の 3 層を機械判定 + LLM 判定でレポートし、必須項目と指摘は独立した判定者の反証を通し、さらに標準に合わせることがリポ自身の設計意図と衝突しないかを判定してから findings に保存して修正シーケンス (repo-audit-fix) へ引き渡す。Use when auditing a repository against personal standards, checking GitHub repo settings, or reviewing repository structure and Claude configuration."
+description: "cwd のリポジトリを個人標準 (repo-standards.json) と突き合わせて精度優先で監査する。GitHub 設定・リポ構成ファイル・.claude 設定の 3 層を機械判定 + LLM 判定でレポートし、必須項目と指摘は独立した判定者の反証を通し、さらに標準に合わせることがリポ自身の設計意図と衝突しないかを判定してから findings に保存して修正シーケンス (repo-audit-fix) へ引き渡す。Use when auditing a repository against personal standards, checking GitHub repo settings, or reviewing repository structure and Claude configuration."
 allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-repo.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-github.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-evidence.sh:*)"
 ---
 
@@ -24,7 +24,7 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
 
    | id | 次にやること |
    |---|---|
-   | `standards-manifest-missing` | fix の内容 (setup リポのセットアップ) を案内する |
+   | `standards-manifest-missing` | 正本はプラグイン同梱なので、ここに来るのは配布の破損。fix の内容 (プラグインの入れ直し) を案内する |
    | `repo-uninitialized` | **repo-bootstrap スキルへ渡す**。コミットが 1 件も無いリポは監査でなく雛形生成の段階で、スクリプトも他の項目を並べずこの 1 件だけを返す。手順 2 以降を回しても、判定対象のファイルが存在しないので LLM 判定・反証・衝突判定が全件空振りする |
 
 2. **判定** — 対象は `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh list --needs-verdict` (未判定のもの、判定後に HEAD が進んで陳腐化したもの、および repo-audit-min が付けた暫定判定 (`verdict_source: min`))。**暫定判定は根拠が残っていても必ず判定し直す** — 安い層は畳んだ材料とファイル 3 件までで判定しており、本監査の結論として残してよい深さではない。項目ごとに**並列で standards-auditor サブエージェントへ委譲**する (`subagent_type: "repo-standards:standards-auditor"`)。渡すのは判定観点 (detail) と `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-evidence.sh <id>` の出力。**材料は下限で、実ファイルを読ませる**のが本監査の要点 (材料だけで済ませるのは repo-audit-min の作法)
@@ -74,8 +74,8 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
 
 ## 詳細の在処
 
-- チェックリストの正本: `~/.claude/repo-standards.json` (実体は shinyaoguri/setup の claude/repo-standards.json。項目の追加・変更はプラグインでなく setup リポへの PR で行う)
-- 必須項目と根拠だけ見る: `jq -r '.items[] | select(.level=="required") | [.id, .why] | @tsv' ~/.claude/repo-standards.json`
+- チェックリストの正本: `${CLAUDE_PLUGIN_ROOT}/repo-standards.json` (プラグイン同梱。項目の追加・変更はこのリポジトリへの PR で行う。ADR 0022)
+- 必須項目と根拠だけ見る: `jq -r '.items[] | select(.level=="required") | [.id, .why] | @tsv' ${CLAUDE_PLUGIN_ROOT}/repo-standards.json`
 - 監査出力のスキーマと status の意味: `${CLAUDE_PLUGIN_ROOT}/scripts/rs-lib.sh` 冒頭のコメント
 - findings の行スキーマ・判定を記録するときの制約・decision の意味: `${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh` 冒頭のコメント
 

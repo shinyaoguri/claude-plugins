@@ -15,7 +15,7 @@ allowed-tools: "Bash(gh issue list:*), Bash(gh repo view:*), Bash(gh label list:
    |---|---|
    | 作業中のリポで気付いた、本題と別の問題・改善案 | そのリポ (`gh repo view --json nameWithOwner -q .nameWithOwner`) |
    | repo-standards のスキル手順・同梱スクリプト (rs-*.sh)・プラグイン記述の問題 | `shinyaoguri/claude-plugins` |
-   | チェック項目・判定基準そのもの (個人標準 repo-standards.json の中身) の問題 | `shinyaoguri/setup` |
+   | チェック項目・判定基準そのもの (個人標準 repo-standards.json の中身) の問題 | `shinyaoguri/claude-plugins` |
    | Gyazo アプリ本体の不具合 | 起票せずユーザーに報告 (プレビュー版でサポート対象外) |
 
    作業中のリポと、その上流・下流のリポ (ライブラリと CLI など) の両方に跨るなら**両方へ起票して相互リンクする**。プラグイン絡みで迷ったら claude-plugins 側に立てる (入口なのであちらで振り分けられる)。

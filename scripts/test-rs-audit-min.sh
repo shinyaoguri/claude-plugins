@@ -182,11 +182,24 @@ else
   fail "git リポ外 → exit=$c / 出力: $o"
 fi
 
-# 正本不在 (HOME も潰してフォールバックを断つ)
+# 同梱コピーが主経路 (ADR 0022)。上書きも旧フォールバックも断った素の状態で、
+# スクリプト自身の隣にある正本が解決されて監査が進むこと
+o=$( cd "$dir" && HOME="$tmp/nohome" bash "$target" --no-github ); c=$?
+if [ "$c" -eq 0 ] && ! grep -q '正本 repo-standards.json が無い' <<<"$o"; then
+  ok "同梱コピーが解決される (環境変数も ~/.claude も無い状態)"
+else
+  fail "同梱コピーが解決されない → exit=$c / 出力: $o"
+fi
+
+# 正本不在 = 配布の破損。同梱コピーごと欠けた状態を作る (scripts/ だけ複製し、
+# その隣に repo-standards.json を置かない)。HOME も潰して旧フォールバックを断つ
+broken="$tmp/broken-dist"
+mkdir -p "$broken"
+cp -R "$repo_root/plugins/repo-standards/scripts" "$broken/scripts"
 o=$( cd "$dir" && HOME="$tmp/nohome" REPO_STANDARDS_JSON="$tmp/absent.json" \
-       bash "$target" --no-github ); c=$?
+       bash "$broken/scripts/rs-audit-min.sh" --no-github ); c=$?
 if [ "$c" -eq 0 ] && grep -q '正本 repo-standards.json が無い' <<<"$o"; then
-  ok "正本不在 → 監査を続けず setup を促す"
+  ok "正本不在 (配布の破損) → 監査を続けず入れ直しを促す"
 else
   fail "正本不在 → exit=$c / 出力: $o"
 fi
