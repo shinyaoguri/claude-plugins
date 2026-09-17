@@ -49,8 +49,15 @@ def required_fields: {
   "gh_api":["endpoint","jq","expect"], "builtin":["name"], "llm":["prompt"]
 };
 def destructive_markers: ["削除","git rm ","履歴の書き換え"];
+def evidence_kinds: ["principle","observation","spec"];
 def blank: tostring | test("^\\s*$");
+def isodate: tostring | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 '
+
+# 根拠の種類ごとに要る付帯情報。principle は目的から導けるので日付を持たない。
+# observation (測った事実) と spec (ツールの公式挙動への主張) は時間で古びるので、
+# いつ確かめたかと再確認の手がかりを必須にし、下の鮮度検査の対象にする
+EVIDENCE_MAX_AGE_DAYS="${EVIDENCE_MAX_AGE_DAYS:-180}"
 
 assert_empty "version が 1" \
   "$common_defs"'if .version == 1 then empty else "version=\(.version)" end'
@@ -119,6 +126,48 @@ assert_empty "破壊的な fix が destructive として宣言されている" \
 # why はレポートにそのまま出す根拠。無いと「なぜ直すのか」が説明できない
 assert_empty "全項目に why がある" \
   "$common_defs"'.items[] | select((.why // "") | blank) | "\(.id): why が無い"'
+
+# 根拠が何に立っているかを項目自身に宣言させる。宣言を必須にしておかないと、
+# 「現状こうなっているから」という観測が理由の顔をして紛れ込み、しかもそれが
+# 古びたことに誰も気付けない (この標準が過去に踏んだ形)
+assert_empty "全項目に evidence があり kind が enum に収まる" \
+  "$common_defs"'.items[] | . as $i
+   | (if ($i | has("evidence")) | not then "\($i.id): evidence が無い"
+      elif (evidence_kinds | index($i.evidence.kind)) == null
+      then "\($i.id): 未知の evidence.kind \($i.evidence.kind // "(無し)")"
+      else empty end)'
+
+assert_empty "observation は measured_at と method を持つ" \
+  "$common_defs"'.items[] | . as $i | select($i.evidence.kind == "observation")
+   | (if ($i.evidence.measured_at | isodate | not) then "\($i.id): measured_at が YYYY-MM-DD でない" else empty end),
+     (if (($i.evidence.method // "") | blank) then "\($i.id): method (再測定の手順) が無い" else empty end)'
+
+assert_empty "spec は source と checked_at を持つ" \
+  "$common_defs"'.items[] | . as $i | select($i.evidence.kind == "spec")
+   | (if (($i.evidence.source // "") | test("^https?://") | not) then "\($i.id): source が URL でない" else empty end),
+     (if ($i.evidence.checked_at | isodate | not) then "\($i.id): checked_at が YYYY-MM-DD でない" else empty end)'
+
+assert_empty "principle は日付を持たない (持つなら種類が違う)" \
+  "$common_defs"'.items[] | . as $i | select($i.evidence.kind == "principle")
+   | ($i.evidence | keys | .[] | select(. != "kind") | "\($i.id): principle に \(.) は要らない")'
+
+# 古びた根拠を検出する。自分が scheduled-freshness で他に課していることを自分に当てる
+stale=$(jq -r --argjson max "$EVIDENCE_MAX_AGE_DAYS" --arg today "$(date -u +%Y-%m-%d)" '
+  def days($a; $b): (($b + "T00:00:00Z" | fromdateiso8601) - ($a + "T00:00:00Z" | fromdateiso8601)) / 86400;
+  .items[] | . as $i
+  | ($i.evidence.measured_at // $i.evidence.checked_at) as $d
+  | select($d != null)
+  | days($d; $today) as $age
+  | select($age > $max)
+  | "\($i.id): \($i.evidence.kind) の根拠が \($age | floor) 日前 (上限 \($max) 日) — \($d) に確かめたきり"
+' "$manifest" 2>&1)
+if [ -n "$stale" ]; then
+  echo "NG  根拠が賞味期限内 (observation / spec は ${EVIDENCE_MAX_AGE_DAYS} 日)"
+  printf '%s\n' "$stale" | sed 's/^/      /'
+  failures=$((failures + 1))
+else
+  echo "ok  根拠が賞味期限内 (observation / spec は ${EVIDENCE_MAX_AGE_DAYS} 日)"
+fi
 
 echo
 if [ "$failures" -gt 0 ]; then
