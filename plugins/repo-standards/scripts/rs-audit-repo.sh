@@ -237,22 +237,6 @@ builtin_scheduled_workflow_exists() {
 
 # GitHub Flow「main が唯一の長命ブランチ」の検査。作業中ブランチと区別がつかないため
 # 最終コミットから 30 日以上動いていないものだけを残骸とみなす
-builtin_no_stale_branches() {
-  local now cutoff stale b ts
-  # リモート追跡 ref が 1 本も無ければ検査対象がゼロ。「残骸が無い」ではないので ok に
-  # 丸めない (origin/main しか無いリポは対象があるので通常どおり判定する)
-  [ -n "$(git branch -r 2>/dev/null)" ] \
-    || { echo "skip:リモート追跡ブランチが無い (remote 未設定か未 push。fetch 済みのローカル ref で判定する)"; return; }
-  now=$(date +%s); cutoff=$((now - 30 * 86400)); stale=""
-  while IFS= read -r b; do
-    [ -n "$b" ] || continue
-    ts=$(git log -1 --format=%ct "$b" 2>/dev/null) || continue
-    [ "$ts" -lt "$cutoff" ] && stale="$stale ${b#origin/}"
-  done < <(git branch -r 2>/dev/null | tr -d ' ' | grep -vE '^origin/(HEAD|main|master)' )
-  [ -z "$stale" ] && { echo ok; return; }
-  echo "fail:30 日以上更新の無いリモートブランチ:$stale (ローカルの追跡 ref 基準。fetch していなければ古い可能性)"
-}
-
 # 秘密ファイルが追跡対象に入っていないか。履歴の書き換えは不可逆なので検出のみ
 builtin_no_committed_secrets() {
   local hits
@@ -263,103 +247,6 @@ builtin_no_committed_secrets() {
     | grep -viE '(\.env\.(example|sample|template)|\.lock)' | head -5)
   [ -z "$hits" ] && { echo ok; return; }
   echo "fail:追跡中の秘密ファイル候補: $(tr '\n' ' ' <<<"$hits")"
-}
-
-# 掴んでいるブランチが消えていて、失って困るものを持たない worktree を挙げる。
-# 「消して良いか」の判定に祖先関係 (ahead N) を使わないのが要点 — squash merge では
-# マージ済みでも元コミットが main の祖先にならず ahead に出続けるため、素直に読むと
-# 消せるものを残す。upstream:track が [gone] なら PR がマージされて head ブランチが
-# 削除された後なので、内容は remote 側に入っている
-removable_worktrees() { # → basename を 1 行ずつ
-  local path branch track main_wt
-  # リポジトリ本体と、監査を実行している自分自身は候補から外す
-  main_wt=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')
-  while IFS=$'\t' read -r path branch; do
-    [ -n "$path" ] || continue
-    case "$path" in "$main_wt" | "$root") continue ;; esac
-    # 未コミットの変更があるものは触らない
-    [ -z "$(git -C "$path" status --porcelain 2>/dev/null)" ] || continue
-    # 再生成できない ignored ファイル (.env 等の設定) は通常の status に出ない。
-    # .build や node_modules と違って消すと失われるので、持つものは候補から外す
-    git -C "$path" status --porcelain --ignored 2>/dev/null \
-      | grep -qE '^!! (.*/)?\.env' && continue
-    # detached HEAD は追跡ブランチが無く自動判定できない (PR の head と突き合わせる
-    # 手作業が要る) ので候補にしない
-    [ -n "$branch" ] || continue
-    track=$(git for-each-ref --format='%(upstream:track)' "refs/heads/$branch" 2>/dev/null)
-    [ "$track" = "[gone]" ] || continue
-    basename "$path"
-  done < <(git worktree list --porcelain 2>/dev/null | awk '
-    /^worktree /{p=$2; b=""}
-    /^branch /{sub(/^refs\/heads\//, "", $2); b=$2}
-    /^$/{if (p != "") print p"\t"b; p=""}
-    END{if (p != "") print p"\t"b}')
-}
-
-# 既定ブランチを掴んだ linked worktree。個数・容量とは別枠で扱う — 溜まると重いのではなく、
-# 別の場所での `gh pr merge --delete-branch` を**マージ後のローカル後処理で落とす**ため
-# (fatal: 'main' is already used by worktree at ...)。マージ自体は成功するので気付きにくく、
-# 既定ブランチへの切り戻しとローカルブランチ削除だけが行われないまま残る (経緯: #114)
-default_branch_worktrees() { # → パスを 1 行ずつ
-  local base
-  base=$(git symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)
-  # 1 本目はリポジトリ本体なので外す (そこが既定ブランチを掴んでいるのは正常な状態)
-  git worktree list --porcelain 2>/dev/null | awk -v base="refs/heads/${base#origin/}" '
-    /^worktree /{ p = substr($0, 10); b = "" }
-    /^branch /  { b = substr($0, 8) }
-    /^$/        { if (p != "") { if (++n > 1 && b == base) print p } ; p = "" }
-    END         { if (p != "" && ++n > 1 && b == base) print p }
-  '
-}
-
-# 使い終わった worktree の残骸。~/.claude/ の symlink が worktree を指す事故の温床でもある
-builtin_worktrees_clean() {
-  local dirs registered orphan n linked lead holders
-  n=$(git worktree list --porcelain 2>/dev/null | grep -c '^worktree ' || echo 0)
-  linked=$(( n > 0 ? n - 1 : 0 ))
-  # linked worktree も置き場のディレクトリも無ければ、掃除できる残骸が存在しない。
-  # ディレクトリだけある状態は「使っているが今は残骸ゼロ」なので検査結果の ok
-  if [ "$n" -le 1 ] && [ ! -d .claude/worktrees ]; then
-    echo "skip:linked worktree が無い (掃除の対象がゼロ)"
-    return
-  fi
-  # 掃除の観点とは別に、linked worktree を使っているリポでは「別 worktree への誤書き込みを
-  # 止めるマシン側のガードが実際に効いているか」が問題になる。判定は env-doctor に一本化し
-  # (リポ層の項目にするとマシン 1 台の事実を全リポぶん判定することになる)、ここは本数を
-  # detail の先頭へ固定で載せるだけにする。スキル側が自由文でなく本数で分岐できる
-  # (経緯: claude-plugins#82)
-  lead="linked worktree $linked 個"
-  # 既定ブランチを掴んだものは 1 本でも指摘する (本数・容量のしきい値より前に見る)。
-  # .claude/worktrees の外に置かれた worktree でも後処理は同じように壊れるので、
-  # 置き場のディレクトリが無い分岐よりも前に置く
-  holders=$(default_branch_worktrees | tr '\n' ' ')
-  if [ -n "${holders// /}" ]; then
-    echo "fail:$lead / 既定ブランチを掴んだ worktree: ${holders% } — 別の場所での gh pr merge --delete-branch がマージ後の後処理で落ちる。未コミットの変更が無いことを確かめて git worktree remove <path> (残すならその worktree で別ブランチへ切り替える)"
-    return
-  fi
-  [ -d .claude/worktrees ] || { echo "ok:$lead (.claude/worktrees は無い)"; return; }
-  registered=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}')
-  orphan=""
-  for dirs in .claude/worktrees/*/; do
-    [ -d "$dirs" ] || continue
-    dirs=${dirs%/}
-    printf '%s\n' "$registered" | grep -qF "$(cd "$dirs" && pwd)" || orphan="$orphan $(basename "$dirs")"
-  done
-  if [ -n "$orphan" ]; then
-    echo "fail:$lead / git に登録されていない worktree ディレクトリ:$orphan"
-  elif [ "$n" -gt 3 ]; then
-    # 個数だけでは緊急度が伝わらない (1 リポで 9 GB 超えた実例がある) ので容量を添える
-    local mb removable
-    mb=$(du -sk .claude/worktrees 2>/dev/null | awk '{printf "%d", $1 / 1024}')
-    removable=$(removable_worktrees | tr '\n' ' ')
-    if [ -n "${removable// /}" ]; then
-      echo "fail:$lead / ${mb} MB ある。upstream が [gone] で未コミットの変更も無い候補: ${removable% }"
-    else
-      echo "fail:$lead / ${mb} MB ある (自動で安全と判定できる候補は無い。squash merge では ahead N が未マージを意味しないので、PR のマージ状況で確認する)"
-    fi
-  else
-    echo "ok:$lead (掃除の対象となる残骸は無い)"
-  fi
 }
 
 # ---- 項目ループ ----

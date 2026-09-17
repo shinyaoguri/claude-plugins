@@ -162,7 +162,7 @@
     },
     {
       "id": "no-stale-branches",
-      "layer": "repo",
+      "layer": "github",
       "level": "recommended",
       "check": { "type": "builtin", "name": "no_stale_branches" },
       "why": "GitHub Flow: main が唯一の長命ブランチ。30 日以上動いていないリモートブランチは作業の取り残し",
@@ -607,17 +607,6 @@
       "why": "確認プロンプトの削減。permissions をリポごとにスコープしグローバルの allow を空に保つのは運用の選択で、仕様上の制約ではない (プラグインからは permissions を供給できないが、ユーザーレベルに書くこと自体は妨げられていない)",
       "evidence": { "kind": "spec", "source": "https://code.claude.com/docs/en/permissions", "checked_at": "2026-09-17" },
       "cadence": "drift"
-    },
-    {
-      "id": "claude-worktrees-clean",
-      "layer": "claude",
-      "level": "recommended",
-      "check": { "type": "builtin", "name": "worktrees_clean" },
-      "why": "使い終わった worktree の残骸。~/.claude の symlink が worktree を指してしまう事故の温床でもある",
-      "evidence": { "kind": "principle" },
-      "cadence": "drift",
-      "fix": "git worktree remove <path> で掃除する (削除は提示のみ)",
-      "fix_kind": "destructive"
     },
     {
       "id": "claude-mcp-config-sane",

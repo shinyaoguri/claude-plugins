@@ -164,6 +164,36 @@ builtin_tag_protection() {
   echo fail
 }
 
+# 30 日以上動いていないリモートブランチ。ローカルの追跡 ref でなく GitHub に直接聞く
+# — fetch の鮮度でマシンごとに結論が変わるのを避けるため (ADR 0026)。GraphQL 1 回で
+# 全ブランチの最終コミット日時が取れる (REST だとブランチごとに 1 回要る)
+builtin_no_stale_branches() {
+  local owner name json cutoff stale
+  owner=${repo%%/*}; name=${repo##*/}
+  json=$(gh api graphql -f owner="$owner" -f name="$name" -f query='
+    query($owner:String!, $name:String!) {
+      repository(owner:$owner, name:$name) {
+        defaultBranchRef { name }
+        refs(refPrefix:"refs/heads/", first:100,
+             orderBy:{field:TAG_COMMIT_DATE, direction:DESC}) {
+          nodes { name target { ... on Commit { committedDate } } }
+        }
+      }
+    }' 2>/dev/null) || { echo "skip:ブランチ一覧を取得できない (トークン権限を確認)"; return; }
+
+  cutoff=$(( $(date +%s) - 30 * 86400 ))
+  stale=$(jq -r --argjson cutoff "$cutoff" '
+    .data.repository as $r
+    | $r.defaultBranchRef.name as $def
+    | $r.refs.nodes[]
+    | select(.name != $def and .target.committedDate != null)
+    | select((.target.committedDate | fromdateiso8601) < $cutoff)
+    | .name' <<<"$json" | tr "\n" " ")
+
+  [ -z "${stale// /}" ] && { echo ok; return; }
+  echo "fail:30 日以上更新の無いリモートブランチ: ${stale% }"
+}
+
 # ---- 項目ループ ----
 
 while IFS= read -r item; do
