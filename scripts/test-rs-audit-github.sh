@@ -38,6 +38,15 @@ cat > "$manifest" <<'EOF'
       "fix": "テスト用"
     },
     {
+      "id": "no-stale-branches",
+      "layer": "github",
+      "level": "recommended",
+     
+      "check": { "type": "builtin", "name": "no_stale_branches" },
+      "why": "テスト用",
+      "fix": "テスト用"
+    },
+    {
       "id": "gh-linear-history",
       "layer": "github",
       "level": "recommended",
@@ -67,6 +76,7 @@ case "$cmd" in
     while [ $# -gt 0 ]; do
       case "$1" in
         --jq) jqexpr=$2; shift 2 ;;
+        -f|-F) shift 2 ;;
         -*) shift ;;
         *) endpoint=$1; shift ;;
       esac
@@ -87,6 +97,25 @@ cat > "$gh_dir/repos_tester_dummy.json" <<'EOF'
 { "private": false, "default_branch": "main", "archived": false }
 EOF
 echo '[]' > "$gh_dir/repos_tester_dummy_rulesets.json"
+
+# 日付は固定値にしない — fixture の絶対時刻が古びて赤くなる事故を避ける (setup#36)
+days_ago() {
+  date -u -v-"$1"d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "$1 days ago" +%Y-%m-%dT%H:%M:%SZ
+}
+
+# graphql: ブランチ一覧と最終コミット日時 (no_stale_branches が読む)
+write_graphql() {  # write_graphql <dir> <name:daysAgo>...
+  local dir=$1; shift
+  local nodes="" n d
+  for pair in "$@"; do
+    n=${pair%%:*}; d=${pair##*:}
+    [ -n "$nodes" ] && nodes="$nodes,"
+    nodes="$nodes{\"name\":\"$n\",\"target\":{\"committedDate\":\"$(days_ago "$d")\"}}"
+  done
+  printf '{"data":{"repository":{"defaultBranchRef":{"name":"main"},"refs":{"nodes":[%s]}}}}' \
+    "$nodes" > "$dir/graphql.json"
+}
+write_graphql "$gh_dir" "main:400" "feature:3"
 
 # run <dir> [env VAR=VAL ...] → 対象スクリプトの出力
 run() {
@@ -251,6 +280,39 @@ assert_eq skip "$(jq -r 'select(.id == "gh-required-checks") | .status' <<<"$out
   "未認証なら項目は skip"
 assert_eq github "$(jq -r 'select(.id == "_meta") | .layer' <<<"$out")" \
   "未認証でも _meta 行がある"
+
+echo
+echo "no_stale_branches (GitHub に直接聞く。ADR 0026):"
+dir="$tmp/case-stale"
+git init -q -b main "$dir"
+
+# 既定 fixture: main は 400 日前だが既定ブランチなので対象外、feature は 3 日前
+assert_eq ok "$(run "$dir" env | jq -r 'select(.id == "no-stale-branches") | .status')" \
+  "既定ブランチは古くても対象外"
+
+gh_dir_stale="$tmp/gh-responses-stale"
+mkdir -p "$gh_dir_stale"
+cp "$gh_dir"/repos_tester_dummy*.json "$gh_dir_stale/"
+write_graphql "$gh_dir_stale" "main:1" "old-feature:40" "fresh:3"
+out=$( cd "$dir" && PATH="$bin:$PATH" FAKE_GH_DIR="$gh_dir_stale" \
+  REPO_STANDARDS_JSON="$manifest" bash "$target" )
+assert_eq warn "$(jq -r 'select(.id == "no-stale-branches") | .status' <<<"$out")" \
+  "30 日を超えたブランチを検出する"
+assert_eq "old-feature" \
+  "$(jq -r 'select(.id == "no-stale-branches") | .detail | capture("ブランチ: (?<b>[^ ]+)") | .b' <<<"$out")" \
+  "新しいブランチは挙げない"
+
+# fetch の鮮度に依存しないことの裏返し: ローカルに ref が 1 本も無くても判定できる
+assert_eq 0 "$( cd "$dir" && git branch -r | wc -l | tr -d ' ' )" \
+  "ローカルにリモート追跡 ref が無い状態で上を判定している"
+
+gh_dir_gql_fail="$tmp/gh-responses-gqlfail"
+mkdir -p "$gh_dir_gql_fail"
+cp "$gh_dir"/repos_tester_dummy*.json "$gh_dir_gql_fail/"
+out=$( cd "$dir" && PATH="$bin:$PATH" FAKE_GH_DIR="$gh_dir_gql_fail" \
+  REPO_STANDARDS_JSON="$manifest" bash "$target" )
+assert_eq skip "$(jq -r 'select(.id == "no-stale-branches") | .status' <<<"$out")" \
+  "ブランチ一覧を取れないときは skip (ng に倒さない)"
 
 echo
 echo "出力契約 (status は ok/ng/warn/blocked/skip/manual のみ):"
