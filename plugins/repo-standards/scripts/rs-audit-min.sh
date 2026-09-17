@@ -28,7 +28,7 @@ set -uo pipefail
 here=$(dirname "$0")
 command -v jq >/dev/null 2>&1 || { echo "rs-audit-min: jq が必要 (brew install jq)" >&2; exit 2; }
 
-with_github=1
+with_github=1 cadence=
 width=60
 save=0
 while [ $# -gt 0 ]; do
@@ -36,14 +36,18 @@ while [ $# -gt 0 ]; do
     --no-github) with_github=0; shift ;;
     --width) width=${2:-60}; shift 2 ;;
     --save) save=1; shift ;;
+    --cadence)
+      cadence=${2:-}
+      case "$cadence" in bootstrap|drift) ;; *) echo "rs-audit-min: --cadence は bootstrap か drift" >&2; exit 2 ;; esac
+      shift 2 ;;
     *) echo "rs-audit-min: 不明な引数: $1" >&2; exit 2 ;;
   esac
 done
 case "$width" in ''|*[!0-9]*) echo "rs-audit-min: --width は 0 以上の整数" >&2; exit 2 ;; esac
 
 raw=$({
-  bash "$here/rs-audit-repo.sh"
-  [ "$with_github" -eq 1 ] && bash "$here/rs-audit-github.sh"
+  bash "$here/rs-audit-repo.sh" ${cadence:+--cadence "$cadence"}
+  [ "$with_github" -eq 1 ] && bash "$here/rs-audit-github.sh" ${cadence:+--cadence "$cadence"}
 })
 
 # 保存の出力 (JSON Lines 全行 + 集計) は捨てる。ここに流すとこのスクリプトの存在理由

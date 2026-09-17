@@ -6,6 +6,22 @@
 set -uo pipefail
 . "$(dirname "$0")/rs-lib.sh"
 
+# --cadence <bootstrap|drift> で項目を絞る。既定は全件 — 絞るのは「定期的に見直す」
+# 用途のためで、リポを初めて見るときに設置漏れが隠れては困る (ADR 0025)
+cadence_filter=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --cadence)
+      cadence_filter="${2:-}"
+      case "$cadence_filter" in
+        bootstrap|drift) ;;
+        *) echo "$(basename "$0"): --cadence は bootstrap か drift" >&2; exit 2 ;;
+      esac
+      shift 2 ;;
+    *) echo "$(basename "$0"): 不明な引数: $1" >&2; exit 2 ;;
+  esac
+done
+
 manifest=$(resolve_standards) || { emit_manifest_missing; exit 0; }
 
 # 前提が満たせないとき: layer=github の全項目を同じ理由で skip して正常終了。
@@ -151,6 +167,11 @@ builtin_tag_protection() {
 # ---- 項目ループ ----
 
 while IFS= read -r item; do
+  # cadence フィルタ (--cadence 指定時のみ絞る。既定は全件)
+  if [ -n "$cadence_filter" ] && [ "$(jq -r '.cadence // "bootstrap"' <<<"$item")" != "$cadence_filter" ]; then
+    continue
+  fi
+
   id=$(jq -r .id <<<"$item")
   level=$(jq -r .level <<<"$item")
   why=$(jq -r .why <<<"$item")

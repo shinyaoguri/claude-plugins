@@ -50,6 +50,7 @@ def required_fields: {
 };
 def destructive_markers: ["削除","git rm ","履歴の書き換え"];
 def evidence_kinds: ["principle","observation","spec"];
+def cadences: ["bootstrap","drift"];
 def blank: tostring | test("^\\s*$");
 def isodate: tostring | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 '
@@ -120,6 +121,15 @@ assert_empty "破壊的な fix が destructive として宣言されている" \
 # why はレポートにそのまま出す根拠。無いと「なぜ直すのか」が説明できない
 assert_empty "全項目に why がある" \
   "$common_defs"'.items[] | select((.why // "") | blank) | "\(.id): why が無い"'
+
+# 一度設置すれば終わる項目と、作業そのものが状態を崩していく項目を分ける。
+# 宣言を必須にするのは、新しい項目を足す人にどちらかを考えさせるため (ADR 0025)
+assert_empty "全項目に cadence があり enum に収まる" \
+  "$common_defs"'.items[] | . as $i
+   | (if ($i | has("cadence")) | not then "\($i.id): cadence が無い"
+      elif (cadences | index($i.cadence)) == null
+      then "\($i.id): 未知の cadence \($i.cadence)"
+      else empty end)'
 
 # 根拠が何に立っているかを項目自身に宣言させる。宣言を必須にしておかないと、
 # 「現状こうなっているから」という観測が理由の顔をして紛れ込み、しかもそれが

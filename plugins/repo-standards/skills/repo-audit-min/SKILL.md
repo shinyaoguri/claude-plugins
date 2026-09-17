@@ -61,6 +61,8 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
 - **反証・衝突判定をしない**。この 2 つは本監査の作法で、暫定判定は反証待ちにも数えない
 - **修正の提案・適用をしない**。逸脱の指摘までで止める (修正は repo-audit-fix の担当)
 
+**定期的に見直すだけなら `--cadence drift`** を付けると、作業そのものが状態を崩していく 13 項目 (ブランチの取り残し・ADR の遅れ・allow や worktree の溜まり等) に絞れる。既定は全件で、リポジトリを初めて見るときの設置漏れを隠さない ([ADR 0025](https://github.com/shinyaoguri/claude-plugins/blob/main/docs/decisions/0025-cadence-bootstrap-vs-drift.md))。
+
 これらが要るなら repo-audit スキル (本監査) を使う。判定項目そのものの正本は `${CLAUDE_PLUGIN_ROOT}/repo-standards.json` で、項目の追加・変更はこのリポジトリへの PR で行う (ADR 0022)。判定の出自と上書き規則は [ADR 0015](https://github.com/shinyaoguri/claude-plugins/blob/main/docs/decisions/0015-verdict-provenance.md)。
 
 このスキル自体の不具合・使いにくさに気付いたら、report-issue スキルで shinyaoguri/claude-plugins へ気軽に起票する。

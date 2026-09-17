@@ -8,6 +8,7 @@
       "check": { "type": "file_exists", "path": ".gitignore" },
       "why": "生成物・ローカル設定・秘密の置き場を追跡から外す唯一の入口。無いと .env や鍵が追跡され、気付いた時には履歴に残っている (no-committed-secrets はこれが在る前提の後段)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "リポ種別の生成物に合わせた最小構成の .gitignore を作成する",
       "fix_kind": "generative"
     },
@@ -18,6 +19,7 @@
       "check": { "type": "file_exists", "path": "README.md" },
       "why": "目的・構成・使い方の正本。CLAUDE.md からも参照される前提",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "目的・構成・使い方を含む README.md を作成する",
       "fix_kind": "generative"
     },
@@ -28,6 +30,7 @@
       "check": { "type": "file_exists", "path": "CLAUDE.md" },
       "why": "プロジェクト固有規約の正本は各リポの CLAUDE.md (グローバル CLAUDE.md の建付け)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "リポ固有の文脈 (コマンド・構成・非自明な注意) だけを書いた CLAUDE.md を作成する",
       "fix_kind": "generative"
     },
@@ -38,6 +41,7 @@
       "check": { "type": "builtin", "name": "gitignore_covers_env" },
       "why": "秘密情報の置き場は gitignore 済みの .env などに限る (グローバル CLAUDE.md)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": ".gitignore に .env / .env.* を追記する",
       "fix_kind": "deterministic"
     },
@@ -48,6 +52,7 @@
       "check": { "type": "builtin", "name": "ci_workflow_exists" },
       "why": "決定論的に強制できる仕組み (CI) を文書ルールより優先する",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "リポの検証コマンドを回す .github/workflows/ci.yml を追加する",
       "fix_kind": "generative"
     },
@@ -59,6 +64,7 @@
       "check": { "type": "builtin", "name": "license_exists" },
       "why": "public リポは利用条件の明示が必要 (ライセンス不明のコードは誰も使えない)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "LICENSE を追加する (個人 OSS は MIT が既定)",
       "fix_kind": "deterministic"
     },
@@ -70,6 +76,7 @@
       "check": { "type": "file_exists", "path": "CONTRIBUTING.md" },
       "why": "public リポの外部協力者向けの入口。個人リポでは CLAUDE.md が兼ねる場合もある",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "開発フロー・検証コマンド・PR の出し方を書いた CONTRIBUTING.md を追加する",
       "fix_kind": "generative"
     },
@@ -80,6 +87,7 @@
       "check": { "type": "builtin", "name": "adr_exists" },
       "why": "設計判断の記録 (メモリリセット耐性の中核)。なぜその形なのかはコードにも履歴にも残らないので、書かなければ次に触る人が同じ検討をやり直す。置き場は docs/decisions/ でも docs/adr/ でもよい。ディレクトリだけ作って空のまま放置されると記録の実体が無い",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "docs/decisions/ (既に docs/adr/ を使っているならそちら) を作り、状態 / 文脈 / 決定 / 影響の 4 節で ADR を書き始める",
       "fix_kind": "generative"
     },
@@ -93,6 +101,7 @@
       },
       "why": "ADR はディレクトリの存在ではなく「重要な意思決定がそこに残り続けているか」で価値が決まる。存在チェックでは書かれなくなった劣化を検出できない",
       "evidence": { "kind": "principle" },
+      "cadence": "drift",
       "fix": "漏れている決定を ADR に追記し、実装と乖離した ADR は状態を 廃止 / 置換 に更新する",
       "fix_kind": "generative"
     },
@@ -103,6 +112,7 @@
       "check": { "type": "builtin", "name": "changelog_exists" },
       "why": "リリースするリポでは変更履歴が利用者への契約になる (タグが無いリポは対象外)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "CHANGELOG.md を追加する (リリース workflow から自動生成してもよい)",
       "fix_kind": "deterministic"
     },
@@ -113,6 +123,7 @@
       "check": { "type": "builtin", "name": "test_dir_exists" },
       "why": "テストは実装 PR に含める規約 (グローバル CLAUDE.md) の受け皿",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "kind の慣習に沿ったテストディレクトリ (Tests/ ・tests/ ・spec/ など) を作る",
       "fix_kind": "deterministic"
     },
@@ -123,6 +134,7 @@
       "check": { "type": "builtin", "name": "tests_run_in_ci" },
       "why": "テストが CI で回っていないと落ちたまま気付かれない (setup リポ issue #36 の実例)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "workflow にテスト実行ステップを追加し、ruleset の required_status_checks に登録する",
       "fix_kind": "generative"
     },
@@ -133,6 +145,7 @@
       "check": { "type": "builtin", "name": "pr_title_lint_configured" },
       "why": "squash merge では PR タイトルがそのままコミット履歴になるため、Conventional Commits の崩れが履歴全体に残る",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "PR タイトルを検査する workflow を追加する (claude-plugins の scripts/check-pr-title.sh が手本)",
       "fix_kind": "generative"
     },
@@ -143,6 +156,7 @@
       "check": { "type": "builtin", "name": "scheduled_workflow_exists" },
       "why": "参照先・依存・リンクのドリフトは PR CI では捉えられず、定期実行でしか拾えない",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "schedule トリガの workflow を追加し、検知結果を Issue に起票する (claude-plugins の freshness.yml が手本)",
       "fix_kind": "generative"
     },
@@ -153,6 +167,7 @@
       "check": { "type": "builtin", "name": "no_stale_branches" },
       "why": "GitHub Flow: main が唯一の長命ブランチ。30 日以上動いていないリモートブランチは作業の取り残し",
       "evidence": { "kind": "principle" },
+      "cadence": "drift",
       "fix": "マージ済みなら git push origin --delete <branch>、未完なら Draft PR にして意図を残す (削除は提示のみ)",
       "fix_kind": "destructive"
     },
@@ -163,6 +178,7 @@
       "check": { "type": "builtin", "name": "no_committed_secrets" },
       "why": "秘密情報の置き場は gitignore 済みの .env などに限る。追跡されている時点で漏洩リスク",
       "evidence": { "kind": "principle" },
+      "cadence": "drift",
       "fix": "git rm --cached で追跡を外し .gitignore に追加する。漏れた値は必ずローテートする (履歴の書き換えは不可逆なので実行前に要判断)",
       "fix_kind": "destructive"
     },
@@ -173,6 +189,7 @@
       "check": { "type": "file_exists", "path": ".github/dependabot.yml" },
       "why": "依存とワークフローの陳腐化防止。更新は気付いたときにやると溜まって一度に大きくなり、セキュリティ更新が紛れて見落とされる",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "エコシステムに応じた .github/dependabot.yml を追加する (cooldown 7 日: claude-plugins ADR 0005 参照)",
       "fix_kind": "deterministic"
     },
@@ -183,6 +200,7 @@
       "check": { "type": "glob_exists", "path": ".github/ISSUE_TEMPLATE/*" },
       "why": "気付き・改善案を作業を止めず Issue へ残す文化の受け皿",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "改善提案などの最小テンプレートを .github/ISSUE_TEMPLATE/ に追加する",
       "fix_kind": "deterministic"
     },
@@ -193,6 +211,7 @@
       "check": { "type": "builtin", "name": "pr_template_exists" },
       "why": "PR 本文 (目的・変更点・確認方法) を丁寧に書く規約の受け皿",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": ".github/pull_request_template.md を追加する",
       "fix_kind": "deterministic"
     },
@@ -206,6 +225,7 @@
       },
       "why": "セッションの記憶は常にリセットされる前提。恒久的な置き場に記録が無いと、状況・残タスク・中間所見・検証ログが失われて再開できない (グローバル CLAUDE.md の中核規約)",
       "evidence": { "kind": "principle" },
+      "cadence": "drift",
       "fix": "残タスクと課題を Issue に起票し、進行中の調査結果は該当 Issue / PR にコメントで追記する。中長期の計画は docs/ かマイルストーンに置く",
       "fix_kind": "generative"
     },
@@ -219,6 +239,7 @@
       },
       "why": "squash merge ではブランチが消え PR 本文が唯一の記録として残る。見た目の変化は diff から想像できず、マージ後に証跡を足すこともできない (metaphor #631 / #843 で確立した形)",
       "evidence": { "kind": "principle" },
+      "cadence": "drift",
       "fix": "見た目が変わる PR に before/after を貼る運用を CLAUDE.md へ書き、見た目に効くパスを触った PR を CI で検査する。判定の骨子と撮影・貼り方は gyazo-capture スキル (対象パスは実績で決める / 逃げ道は no-visual-change ラベル / 必須ジョブの中に置く)",
       "fix_kind": "generative"
     },
@@ -232,6 +253,7 @@
       },
       "why": "画像をコミットするとリポジトリの容量を圧迫し、撮り直すたびに履歴へ積み上がる。ただしリポジトリ内が正しい置き場になる設計判断もある (metaphor の Examples 実行結果画像) ので、一律禁止ではなく理由の明示を求める",
       "evidence": { "kind": "principle" },
+      "cadence": "drift",
       "fix": "本文の画像を Gyazo へ上げて外部 URL へ差し替える (手順は gyazo-capture スキル)。リポジトリ内に置き続けるなら、その判断と理由を CLAUDE.md か ADR に書く",
       "fix_kind": "generative"
     },
@@ -247,6 +269,7 @@
       },
       "why": "Squash merge 前提 (グローバル CLAUDE.md)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh api -X PATCH repos/{repo} -F allow_squash_merge=true -F allow_merge_commit=false -F allow_rebase_merge=false",
       "fix_kind": "deterministic"
     },
@@ -262,6 +285,7 @@
       },
       "why": "PR タイトルがそのまま squash コミットの要約になる規約 (Conventional Commits を PR タイトルに書く)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh api -X PATCH repos/{repo} -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY",
       "fix_kind": "deterministic"
     },
@@ -277,6 +301,7 @@
       },
       "why": "PR 本文 (目的・変更点・確認方法) を squash コミット本文として履歴に残す",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh api -X PATCH repos/{repo} -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY",
       "fix_kind": "deterministic"
     },
@@ -292,6 +317,7 @@
       },
       "why": "merge 後のブランチ掃除とセットの運用。git fetch -p が消すのは remote-tracking 参照だけなので、ローカルブランチは upstream:track == [gone] を手がかりに掃除する (env-doctor の env-git-fetch-prune / env-git-gone-alias)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh api -X PATCH repos/{repo} -F delete_branch_on_merge=true",
       "fix_kind": "deterministic"
     },
@@ -307,6 +333,7 @@
       },
       "why": "GitHub Flow: main が唯一の長命ブランチ",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh api -X POST \"repos/{repo}/branches/<現 default>/rename\" -f new_name=main",
       "fix_kind": "destructive"
     },
@@ -322,6 +349,7 @@
       },
       "why": "気付きを Issue へ起票する文化の前提",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh repo edit {repo} --enable-issues",
       "fix_kind": "deterministic"
     },
@@ -337,6 +365,7 @@
       },
       "why": "リポ一覧で目的が分かる状態を保つ",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh repo edit {repo} --description \"<1 行の説明>\"",
       "fix_kind": "generative"
     },
@@ -352,6 +381,7 @@
       },
       "why": "ドキュメントはリポ内 (docs/・ADR) が正本。wiki に分散させない",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh repo edit {repo} --enable-wiki=false",
       "fix_kind": "deterministic"
     },
@@ -367,6 +397,7 @@
       },
       "why": "CI green を待つ auto-merge 運用 (Dependabot 自動マージ等) の前提",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh api -X PATCH repos/{repo} -F allow_auto_merge=true",
       "fix_kind": "deterministic"
     },
@@ -382,6 +413,7 @@
       },
       "why": "PR を base 最新へワンクリックで追従させる",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh api -X PATCH repos/{repo} -F allow_update_branch=true",
       "fix_kind": "deterministic"
     },
@@ -392,6 +424,7 @@
       "check": { "type": "builtin", "name": "main_branch_protected" },
       "why": "main への force push・削除を機械的に禁止する (不可逆操作の仕組み化)。保護は ruleset に一本化する — classic branch protection と併用すると同じ制約が二箇所に散り、どちらが効いているか読めなくなる",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "enforcement=active で ~DEFAULT_BRANCH を対象に deletion + non_fast_forward ルールを持つ ruleset を作成する (gh api -X POST repos/{repo}/rulesets --input -)。classic branch protection で運用しているリポは、同じ制約の ruleset を作って classic 側から降ろす (保護が一時的に緩む操作なので人の判断で行う)",
       "fix_kind": "deterministic"
     },
@@ -402,6 +435,7 @@
       "check": { "type": "builtin", "name": "main_pr_required" },
       "why": "main へは PR 経由 (approve 0 で可)。直接 push を許すと CI を通らない変更が既定ブランチに入りうるし、変更の意図が PR 本文として残らない",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "ruleset に pull_request ルール (required_approving_review_count: 0) を追加する。classic 側で満たしている場合も ruleset へ移す",
       "fix_kind": "deterministic"
     },
@@ -412,6 +446,7 @@
       "check": { "type": "builtin", "name": "required_checks_configured" },
       "why": "CI green をマージ条件にする。必須チェックが無いと auto-merge が赤いままマージしてしまい、CI を置いた意味が無くなる",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "ruleset に required_status_checks を追加し CI の必須ジョブ名を登録する。classic 側で満たしている場合も ruleset へ移す",
       "fix_kind": "generative"
     },
@@ -422,6 +457,7 @@
       "check": { "type": "builtin", "name": "main_signatures_required" },
       "why": "コミットの出所を保証する。ローカルは全コミット署名の運用なので、その最終ゲートをリポジトリ側に置く",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "ruleset に required_signatures を追加する (ローカルの署名設定が前提)。classic 側で満たしている場合も ruleset へ移す",
       "fix_kind": "deterministic"
     },
@@ -432,6 +468,7 @@
       "check": { "type": "builtin", "name": "main_linear_history" },
       "why": "squash merge 前提なら履歴は直線になるはずで、崩れていれば運用が漏れている証拠になる",
       "evidence": { "kind": "principle" },
+      "cadence": "drift",
       "fix": "ruleset に required_linear_history を追加する。classic 側で満たしている場合も ruleset へ移す",
       "fix_kind": "deterministic"
     },
@@ -442,6 +479,7 @@
       "check": { "type": "builtin", "name": "tag_protection" },
       "why": "公開済みタグの改変・削除は利用者のビルドを壊す不可逆操作 (タグが無いリポは対象外)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "target: tag / include: refs/tags/v* で deletion + non_fast_forward + update の ruleset を作る (classic の tag protection rules ではなく ruleset で持つ)",
       "fix_kind": "deterministic"
     },
@@ -452,6 +490,7 @@
       "check": { "type": "builtin", "name": "vulnerability_alerts_enabled" },
       "why": "依存脆弱性の検知は全リポ必須",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh api -X PUT repos/{repo}/vulnerability-alerts",
       "fix_kind": "deterministic"
     },
@@ -462,6 +501,7 @@
       "check": { "type": "builtin", "name": "automated_security_fixes_enabled" },
       "why": "脆弱性修正 PR の自動作成 (自動マージは各リポの CI ゲートに委ねる)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh api -X PUT repos/{repo}/automated-security-fixes",
       "fix_kind": "deterministic"
     },
@@ -478,6 +518,7 @@
       },
       "why": "public リポの秘密情報混入の検知",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh api -X PATCH repos/{repo} -f \"security_and_analysis[secret_scanning][status]=enabled\"",
       "fix_kind": "deterministic"
     },
@@ -494,6 +535,7 @@
       },
       "why": "秘密情報を push 前にブロックする (検知より予防)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh api -X PATCH repos/{repo} -f \"security_and_analysis[secret_scanning_push_protection][status]=enabled\"",
       "fix_kind": "deterministic"
     },
@@ -504,6 +546,7 @@
       "check": { "type": "builtin", "name": "actions_default_permissions_read" },
       "why": "workflow の既定トークンは read-only (最小権限。書き込みは workflow 側で個別宣言)",
       "evidence": { "kind": "principle" },
+      "cadence": "bootstrap",
       "fix": "gh api -X PUT repos/{repo}/actions/permissions/workflow -f default_workflow_permissions=read",
       "fix_kind": "deterministic"
     },
@@ -514,6 +557,7 @@
       "check": { "type": "file_absent", "path": ".claude/commands" },
       "why": "skills に一本化する好み。公式は commands を skills に統合したが非推奨とはしておらず、既存の .claude/commands/ は引き続き動作する (.claude/commands/deploy.md と .claude/skills/deploy/SKILL.md はどちらも /deploy を作る)。一本化すると置き場を迷わず、モデルが自律的に見つける経路も使える。claude-plugins ADR 0004 はこのリポ自身については CI で禁じているが、それは配布物としての判断で、一般のリポには当てはめない",
       "evidence": { "kind": "spec", "source": "https://code.claude.com/docs/en/skills", "checked_at": "2026-09-17" },
+      "cadence": "bootstrap",
       "fix": ".claude/skills/<name>/SKILL.md へ移行する。commands/ も動き続けるので急がなくてよい",
       "fix_kind": "generative"
     },
@@ -524,6 +568,7 @@
       "check": { "type": "builtin", "name": "settings_local_not_committed" },
       "why": "settings.local.json はマシンローカル専用。コミットすると他マシンの挙動を汚す",
       "evidence": { "kind": "spec", "source": "https://code.claude.com/docs/en/settings", "checked_at": "2026-09-17" },
+      "cadence": "drift",
       "fix": "git rm --cached .claude/settings.local.json で追跡を外す",
       "fix_kind": "destructive"
     },
@@ -536,7 +581,8 @@
         "prompt": "CLAUDE.md を読み、(1) リポ固有の文脈だけか (グローバル CLAUDE.md や一般論の複製が無いか)、(2) 検証コマンドと非自明な注意が書かれているか、(3) 肥大していないか (目安 100 行以内) を判定する"
       },
       "why": "プロジェクト固有規約の正本としての質を保つ (存在チェックだけでは意味的な劣化を検出できない)",
-      "evidence": { "kind": "principle" }
+      "evidence": { "kind": "principle" },
+      "cadence": "drift"
     },
     {
       "id": "claude-skills-placement",
@@ -547,7 +593,8 @@
         "prompt": ".claude/skills/ の各スキルを読み、このリポ固有の内容か判定する。複数リポで使える汎用スキルは shinyaoguri/claude-plugins (marketplace) への昇格を提案する。第三者配布スキルの実体コピーが無いかも確認する"
       },
       "why": "スキルの置き場ルール (グローバル CLAUDE.md = setup リポ claude/CLAUDE.md のスキル節が正本) の維持",
-      "evidence": { "kind": "principle" }
+      "evidence": { "kind": "principle" },
+      "cadence": "drift"
     },
     {
       "id": "claude-permissions-curated",
@@ -558,7 +605,8 @@
         "prompt": ".claude/settings.json の permissions.allow を読み、このリポで頻繁に使う読み取り系コマンド (ビルド・テスト・git/gh の参照系) が登録されているか判定する。未整備なら毎回確認プロンプトが出て作業が滞るため、リポの実際のコマンドから allow 候補を提案する。逆に破壊的なコマンドが allow に入っていないかも確認する"
       },
       "why": "確認プロンプトの削減。permissions をリポごとにスコープしグローバルの allow を空に保つのは運用の選択で、仕様上の制約ではない (プラグインからは permissions を供給できないが、ユーザーレベルに書くこと自体は妨げられていない)",
-      "evidence": { "kind": "spec", "source": "https://code.claude.com/docs/en/permissions", "checked_at": "2026-09-17" }
+      "evidence": { "kind": "spec", "source": "https://code.claude.com/docs/en/permissions", "checked_at": "2026-09-17" },
+      "cadence": "drift"
     },
     {
       "id": "claude-worktrees-clean",
@@ -567,6 +615,7 @@
       "check": { "type": "builtin", "name": "worktrees_clean" },
       "why": "使い終わった worktree の残骸。~/.claude の symlink が worktree を指してしまう事故の温床でもある",
       "evidence": { "kind": "principle" },
+      "cadence": "drift",
       "fix": "git worktree remove <path> で掃除する (削除は提示のみ)",
       "fix_kind": "destructive"
     },
@@ -579,7 +628,8 @@
         "prompt": ".mcp.json があれば読み、(1) このリポの作業に実際に必要なサーバだけか、(2) API キー・トークンが直書きされていないか (環境変数参照になっているか) を判定する。無ければ対象外"
       },
       "why": "不要な MCP サーバは文脈汚染になり、直書きされた秘密はコミットされる。起動コストは tool search (既定) がサーバの起動を遅延させるぶん以前より軽いが、消えてはいない",
-      "evidence": { "kind": "spec", "source": "https://code.claude.com/docs/en/mcp", "checked_at": "2026-09-17" }
+      "evidence": { "kind": "spec", "source": "https://code.claude.com/docs/en/mcp", "checked_at": "2026-09-17" },
+      "cadence": "drift"
     }
   ]
 }
