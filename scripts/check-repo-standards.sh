@@ -41,7 +41,7 @@ assert_empty() {
 # 契約の定義。消費側と共有している語彙
 common_defs='
 def layers: ["repo","github","claude"];
-def levels: ["required","recommended","rejected"];
+def levels: ["required","recommended"];  # rejected は ADR 0024 で廃止
 def check_types: ["file_exists","file_absent","glob_exists","gh_api","builtin","llm"];
 def fix_kinds: ["deterministic","generative","destructive"];
 def required_fields: {

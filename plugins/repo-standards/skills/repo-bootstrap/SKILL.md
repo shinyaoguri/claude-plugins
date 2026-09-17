@@ -23,7 +23,7 @@ allowed-tools: "Bash(jq:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-git
 2. `level: required` の全項目と `recommended` 項目を列挙し、生成するファイル一覧 (`.gitignore`・README.md・CLAUDE.md・CI・テンプレート等) を提示して確認を取る:
 
    ```bash
-   jq -r '.items[] | select(.level != "rejected") | [.level, .id, .fix // ""] | @tsv' ${CLAUDE_PLUGIN_ROOT}/repo-standards.json
+   jq -r '.items[] | [.level, .id, .fix // ""] | @tsv' ${CLAUDE_PLUGIN_ROOT}/repo-standards.json
    ```
 
    **生成に要る材料もこのとき 1 回でまとめて聞く** — リポの目的 (README の 1 行)、検証コマンド (CLAUDE.md と CI に載る)、LICENSE (既定は MIT)。marker ファイルすら無い段階なのでリポから読めるものはほぼ無く、聞かずに書くと見出しだけの雛形になる。答えが得られなかった項目は生成せず、後から /repo-audit-fix で埋める

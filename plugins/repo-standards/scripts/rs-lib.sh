@@ -13,7 +13,7 @@
 #
 # 出力契約 (rs-audit-min.sh を除く全 rs-*.sh 共通): JSON Lines。1 チェック = 1 行
 #   {"id","layer","level","status","detail","fix"?}
-#   status: ok / ng (required 違反) / warn (recommended 違反・rejected 検出)
+#   status: ok / ng (required 違反) / warn (recommended 違反)
 #         / blocked (別の標準項目が未達で今は判定できない。理由と前提の id を detail に)
 #         / skip (恒久的に対象外。理由を detail に) / manual (LLM 判定へ委譲)
 #
@@ -53,7 +53,7 @@ emit() {
      + (if $fix_kind != "" then {fix_kind:$fix_kind} else {} end)'
 }
 
-# 検査失敗時の status を level から導く (required → ng / recommended・rejected → warn)
+# 検査失敗時の status を level から導く (required → ng / それ以外 → warn)
 fail_status() {
   case "$1" in required) echo ng ;; *) echo warn ;; esac
 }

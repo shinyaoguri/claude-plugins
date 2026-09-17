@@ -76,7 +76,7 @@
     {
       "id": "adr-exists",
       "layer": "repo",
-      "level": "recommended",
+      "level": "required",
       "check": { "type": "builtin", "name": "adr_exists" },
       "why": "設計判断の記録 (メモリリセット耐性の中核)。なぜその形なのかはコードにも履歴にも残らないので、書かなければ次に触る人が同じ検討をやり直す。置き場は docs/decisions/ でも docs/adr/ でもよい。ディレクトリだけ作って空のまま放置されると記録の実体が無い",
       "evidence": { "kind": "principle" },
