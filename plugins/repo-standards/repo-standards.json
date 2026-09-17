@@ -526,12 +526,12 @@
     {
       "id": "claude-commands-dir-absent",
       "layer": "claude",
-      "level": "required",
+      "level": "recommended",
       "applies_to": ["all"],
       "check": { "type": "file_absent", "path": ".claude/commands" },
-      "why": "commands/ は公式非推奨。スラッシュコマンドは skills/<name>/SKILL.md で作る (claude-plugins ADR 0004)",
-      "fix": ".claude/skills/<name>/SKILL.md へ移行して .claude/commands/ を削除する",
-      "fix_kind": "destructive"
+      "why": "skills に一本化する好み。公式は commands を skills に統合したが非推奨とはしておらず、既存の .claude/commands/ は引き続き動作する (.claude/commands/deploy.md と .claude/skills/deploy/SKILL.md はどちらも /deploy を作る)。一本化すると置き場を迷わず、モデルが自律的に見つける経路も使える。claude-plugins ADR 0004 はこのリポ自身については CI で禁じているが、それは配布物としての判断で、一般のリポには当てはめない",
+      "fix": ".claude/skills/<name>/SKILL.md へ移行する。commands/ も動き続けるので急がなくてよい",
+      "fix_kind": "generative"
     },
     {
       "id": "claude-settings-local-not-committed",
@@ -574,7 +574,7 @@
         "type": "llm",
         "prompt": ".claude/settings.json の permissions.allow を読み、このリポで頻繁に使う読み取り系コマンド (ビルド・テスト・git/gh の参照系) が登録されているか判定する。未整備なら毎回確認プロンプトが出て作業が滞るため、リポの実際のコマンドから allow 候補を提案する。逆に破壊的なコマンドが allow に入っていないかも確認する"
       },
-      "why": "確認プロンプトの削減。permissions はリポごとにスコープするのが原則 (グローバルの allow は空のまま保つ)"
+      "why": "確認プロンプトの削減。permissions をリポごとにスコープしグローバルの allow を空に保つのは運用の選択で、仕様上の制約ではない (プラグインからは permissions を供給できないが、ユーザーレベルに書くこと自体は妨げられていない)"
     },
     {
       "id": "claude-worktrees-clean",
@@ -595,7 +595,7 @@
         "type": "llm",
         "prompt": ".mcp.json があれば読み、(1) このリポの作業に実際に必要なサーバだけか、(2) API キー・トークンが直書きされていないか (環境変数参照になっているか) を判定する。無ければ対象外"
       },
-      "why": "不要な MCP サーバは起動コストと文脈汚染になり、直書きされた秘密はコミットされる"
+      "why": "不要な MCP サーバは文脈汚染になり、直書きされた秘密はコミットされる。起動コストは tool search (既定) がサーバの起動を遅延させるぶん以前より軽いが、消えてはいない"
     }
   ]
 }
