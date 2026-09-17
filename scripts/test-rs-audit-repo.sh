@@ -23,13 +23,12 @@ manifest="$tmp/standards.json"
 cat > "$manifest" <<'EOF'
 {
   "version": 1,
-  "kinds": [{ "id": "generic", "marker": null }],
   "items": [
     {
       "id": "adr-exists",
       "layer": "repo",
       "level": "recommended",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "adr_exists" },
       "why": "テスト用",
       "fix": "テスト用"
@@ -38,7 +37,7 @@ cat > "$manifest" <<'EOF'
       "id": "test-dir-exists",
       "layer": "repo",
       "level": "recommended",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "test_dir_exists" },
       "why": "テスト用",
       "fix": "テスト用"
@@ -47,7 +46,7 @@ cat > "$manifest" <<'EOF'
       "id": "tests-run-in-ci",
       "layer": "repo",
       "level": "recommended",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "tests_run_in_ci" },
       "why": "テスト用",
       "fix": "テスト用"
@@ -56,7 +55,7 @@ cat > "$manifest" <<'EOF'
       "id": "no-committed-secrets",
       "layer": "repo",
       "level": "recommended",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "no_committed_secrets" },
       "why": "テスト用",
       "fix": "テスト用"
@@ -65,7 +64,7 @@ cat > "$manifest" <<'EOF'
       "id": "no-stale-branches",
       "layer": "repo",
       "level": "recommended",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "no_stale_branches" },
       "why": "テスト用",
       "fix": "テスト用"
@@ -74,7 +73,7 @@ cat > "$manifest" <<'EOF'
       "id": "worktrees-clean",
       "layer": "repo",
       "level": "recommended",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "worktrees_clean" },
       "why": "テスト用",
       "fix": "テスト用"
@@ -83,7 +82,7 @@ cat > "$manifest" <<'EOF'
       "id": "gitignore-covers-env",
       "layer": "repo",
       "level": "recommended",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "gitignore_covers_env" },
       "why": "テスト用",
       "fix": "テスト用"
@@ -92,7 +91,7 @@ cat > "$manifest" <<'EOF'
       "id": "pr-title-lint",
       "layer": "repo",
       "level": "recommended",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "pr_title_lint_configured" },
       "why": "テスト用",
       "fix": "テスト用"
@@ -101,7 +100,7 @@ cat > "$manifest" <<'EOF'
       "id": "scheduled-freshness",
       "layer": "repo",
       "level": "recommended",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "scheduled_workflow_exists" },
       "why": "テスト用",
       "fix": "テスト用"
@@ -110,7 +109,7 @@ cat > "$manifest" <<'EOF'
       "id": "changelog-exists",
       "layer": "repo",
       "level": "recommended",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "changelog_exists" },
       "why": "テスト用",
       "fix": "テスト用"
@@ -557,9 +556,8 @@ vis_manifest="$tmp/vis.json"
 cat > "$vis_manifest" <<'EOF'
 {
   "version": 1,
-  "kinds": [{ "id": "generic", "marker": null }],
   "items": [
-    { "id": "license-exists", "layer": "repo", "level": "recommended", "applies_to": ["all"],
+    { "id": "license-exists", "layer": "repo", "level": "recommended",
       "when": { "visibility": "public" },
       "check": { "type": "builtin", "name": "license_exists" },
       "why": "テスト用", "fix": "テスト用" }
@@ -645,12 +643,11 @@ mkdir -p "$fk_dir"
 cat > "$fk_dir/m.json" <<'EOF'
 {
   "version": 1,
-  "kinds": [{ "id": "generic", "marker": null }],
   "items": [
-    { "id": "with-kind", "layer": "repo", "level": "required", "applies_to": ["all"],
+    { "id": "with-kind", "layer": "repo", "level": "required",
       "check": { "type": "file_exists", "path": "README.md" },
       "why": "テスト用", "fix": "テスト用", "fix_kind": "generative" },
-    { "id": "without-kind", "layer": "repo", "level": "required", "applies_to": ["all"],
+    { "id": "without-kind", "layer": "repo", "level": "required",
       "check": { "type": "file_exists", "path": "README.md" },
       "why": "テスト用", "fix": "テスト用" }
   ]

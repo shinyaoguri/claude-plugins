@@ -18,13 +18,12 @@ manifest="$tmp/standards.json"
 cat > "$manifest" <<'EOF'
 {
   "version": 1,
-  "kinds": [{ "id": "generic", "marker": null }],
   "items": [
     {
       "id": "gh-required-checks",
       "layer": "github",
       "level": "required",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "required_checks_configured" },
       "why": "テスト用",
       "fix": "テスト用"
@@ -33,7 +32,7 @@ cat > "$manifest" <<'EOF'
       "id": "gh-signatures-required",
       "layer": "github",
       "level": "recommended",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "main_signatures_required" },
       "why": "テスト用",
       "fix": "テスト用"
@@ -42,7 +41,7 @@ cat > "$manifest" <<'EOF'
       "id": "gh-linear-history",
       "layer": "github",
       "level": "recommended",
-      "applies_to": ["all"],
+     
       "check": { "type": "builtin", "name": "main_linear_history" },
       "why": "テスト用",
       "fix": "テスト用"

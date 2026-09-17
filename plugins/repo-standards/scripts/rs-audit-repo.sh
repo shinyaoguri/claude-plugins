@@ -13,13 +13,14 @@ cd "$root"
 
 manifest=$(resolve_standards) || { emit_manifest_missing; exit 0; }
 
-# リポ種別: marker ファイルが存在する最初の kind。無ければ marker: null の kind
-kind="" fallback=""
-while IFS=$'\t' read -r kid marker; do
-  if [ "$marker" = "__null__" ]; then fallback=$kid; continue; fi
-  [ -z "$kind" ] && [ -e "$marker" ] && kind=$kid
-done < <(jq -r '.kinds[] | [.id, (.marker // "__null__")] | @tsv' "$manifest")
-[ -n "$kind" ] || kind=${fallback:-generic}
+# リポ種別: marker ファイルが存在する最初の kind。どれも無ければ generic。
+# 出力の _meta に載り、repo-audit-fix が「エコシステムを聞くか」の分岐に使う。
+# 正本でなくここに置くのは、言語ごとの知識 (テストディレクトリの命名・package.json の
+# 特別扱い) が既にこのスクリプトにあり、同じ関心を 2 箇所へ散らさないため (ADR 0023)
+kind=generic
+for pair in "swift:Package.swift" "web:package.json" "python:pyproject.toml"; do
+  if [ -e "${pair#*:}" ]; then kind="${pair%%:*}"; break; fi
+done
 
 # 可視性を引けなかった理由。gh 認証・remote の有無まで見て切り分ける — 原因が何であれ
 # 「gh 未認証」と言ってしまうと、受け手は gh auth login を疑って時間を使う。
@@ -356,11 +357,6 @@ while IFS= read -r item; do
   fix_kind=$(jq -r '.fix_kind // ""' <<<"$item")
   ctype=$(jq -r .check.type <<<"$item")
 
-  # リポ種別のフィルタ
-  if ! jq -e --arg k "$kind" '.applies_to | index("all") or index($k)' >/dev/null <<<"$item"; then
-    emit "$id" "$layer" "$level" skip "リポ種別 $kind は対象外"
-    continue
-  fi
 
   # 可視性の条件 (when.visibility)
   want_vis=$(jq -r '.when.visibility // ""' <<<"$item")

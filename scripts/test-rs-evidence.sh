@@ -38,21 +38,20 @@ manifest="$tmp/standards.json"
 cat > "$manifest" <<'EOF'
 {
   "version": 1,
-  "kinds": [{ "id": "generic", "marker": null }],
   "items": [
-    { "id": "adr-covers-decisions", "layer": "repo", "level": "required", "applies_to": ["all"],
+    { "id": "adr-covers-decisions", "layer": "repo", "level": "required",
       "check": { "type": "llm", "prompt": "ADR の網羅性を判定する" }, "why": "テスト用", "fix": "テスト用" },
-    { "id": "work-log-externalized", "layer": "repo", "level": "required", "applies_to": ["all"],
+    { "id": "work-log-externalized", "layer": "repo", "level": "required",
       "check": { "type": "llm", "prompt": "作業ログの外部化を判定する" }, "why": "テスト用", "fix": "テスト用" },
-    { "id": "claude-md-quality", "layer": "claude", "level": "recommended", "applies_to": ["all"],
+    { "id": "claude-md-quality", "layer": "claude", "level": "recommended",
       "check": { "type": "llm", "prompt": "CLAUDE.md の質を判定する" }, "why": "テスト用", "fix": "テスト用" },
-    { "id": "claude-mcp-config-sane", "layer": "claude", "level": "recommended", "applies_to": ["all"],
+    { "id": "claude-mcp-config-sane", "layer": "claude", "level": "recommended",
       "check": { "type": "llm", "prompt": "MCP 設定の妥当性を判定する" }, "why": "テスト用", "fix": "テスト用" },
-    { "id": "pr-visual-evidence", "layer": "repo", "level": "recommended", "applies_to": ["all"],
+    { "id": "pr-visual-evidence", "layer": "repo", "level": "recommended",
       "check": { "type": "llm", "prompt": "見た目の変更に視覚的な証跡が残っているかを判定する" }, "why": "テスト用", "fix": "テスト用" },
-    { "id": "docs-images-external", "layer": "repo", "level": "recommended", "applies_to": ["all"],
+    { "id": "docs-images-external", "layer": "repo", "level": "recommended",
       "check": { "type": "llm", "prompt": "ドキュメント本文の画像が外部 URL かを判定する" }, "why": "テスト用", "fix": "テスト用" },
-    { "id": "future-llm-item", "layer": "repo", "level": "recommended", "applies_to": ["all"],
+    { "id": "future-llm-item", "layer": "repo", "level": "recommended",
       "check": { "type": "llm", "prompt": "将来 setup リポ側で足される項目" }, "why": "テスト用", "fix": "テスト用" }
   ]
 }
