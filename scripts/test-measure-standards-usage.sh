@@ -165,6 +165,18 @@ rm "$GH_STUB_DIR/o__good/release"
 out=$(REPOS="o/good" bash "$target" changelog-exists)
 check "リリースが無ければ changelog-exists は対象外" "0" "$(field "$out" changelog-exists installed)"
 
+# --- 正本が when.visibility で絞っている項目は、合わないリポを母数に入れない ---
+# 絞ったあとの再測定が、絞る前と同じ母数で測られないようにする。REPOS は <owner/repo>:<可視性> で渡せる
+echo "${today}T00:00:00Z" > "$GH_STUB_DIR/o__good/release"
+printf '{"items":[{"id":"issue-template-exists","when":{"visibility":"public"}},{"id":"adr-exists"}]}' > "$sandbox/manifest.json"
+out=$(REPO_STANDARDS_JSON="$sandbox/manifest.json" REPOS="o/good:private" bash "$target" issue-template-exists adr-exists)
+check "public 限定の項目は private リポを母数に入れない" "0" "$(field "$out" issue-template-exists installed)"
+check "when を持たない項目は可視性を問わない" "1" "$(field "$out" adr-exists installed)"
+out=$(REPO_STANDARDS_JSON="$sandbox/manifest.json" REPOS="o/good:public" bash "$target" issue-template-exists)
+check "public 限定の項目は public リポを数える" "1" "$(field "$out" issue-template-exists installed)"
+out=$(REPO_STANDARDS_JSON="$sandbox/manifest.json" REPOS="o/good" bash "$target" issue-template-exists)
+check "可視性が分からないリポは外さない (境界値)" "1" "$(field "$out" issue-template-exists installed)"
+
 # --- 失敗系: 測り方を持たない項目 ---
 REPOS="o/good" bash "$target" gh-squash-only >/dev/null 2>&1
 check "測り方を持たない項目は exit 2" "2" "$?"

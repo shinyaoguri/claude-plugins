@@ -5,8 +5,9 @@
 #   scripts/measure-standards-usage.sh [<項目 id>...]     # 省略時は測れる全項目
 #
 #     OWNER=<login>        対象の持ち主 (既定: gh の認証ユーザー)
-#     REPOS="o/a o/b"      対象リポを直接指定する (既定: OWNER の source リポのうち、アーカイブされて
-#                          おらず直近 SINCE_DAYS 日に push のあるもの)
+#     REPOS="o/a o/b:private"  対象リポを直接指定する (既定: OWNER の source リポのうち、アーカイブされて
+#                          おらず直近 SINCE_DAYS 日に push のあるもの)。:public / :private を付けると
+#                          可視性を渡せる (付けなければ不明として、どの項目の母数にも入れる)
 #     SINCE_DAYS=90        「直近」の幅
 #     SAMPLE=50            1 リポあたりに見る Issue / PR の件数
 #
@@ -44,10 +45,15 @@ if [ -n "${REPOS:-}" ]; then
 else
   owner=${OWNER:-$(gh api user --jq .login 2>/dev/null)} || owner=""
   [ -n "$owner" ] || { echo "対象の持ち主を決められない (OWNER か REPOS を渡す)" >&2; exit 2; }
-  repos=$(gh repo list "$owner" --source --no-archived --limit 200 --json nameWithOwner,pushedAt 2>/dev/null \
-    | jq -r --arg c "$cutoff" '.[] | select(.pushedAt > $c) | .nameWithOwner') || repos=""
+  repos=$(gh repo list "$owner" --source --no-archived --limit 200 --json nameWithOwner,pushedAt,visibility 2>/dev/null \
+    | jq -r --arg c "$cutoff" '.[] | select(.pushedAt > $c) | "\(.nameWithOwner):\(.visibility | ascii_downcase)"') || repos=""
 fi
 [ -n "$repos" ] || { echo "対象リポが 0 件" >&2; exit 2; }
+
+# 正本が when.visibility で対象を絞っている項目は、合わないリポを母数から外す。絞ったあとの再測定が
+# 絞る前と同じ母数で測られると、「使用が低い」という同じ結論を永久に出し続ける
+manifest=${REPO_STANDARDS_JSON:-$(cd "$(dirname "$0")/.." && pwd)/plugins/repo-standards/repo-standards.json}
+wanted_visibility() { jq -r --arg id "$1" '.items[] | select(.id == $id) | .when.visibility // ""' "$manifest" 2>/dev/null; }
 
 # ---- 1 リポぶんの材料 (項目をまたいで使い回す。失敗したら return 1 = このリポは skipped) ----
 load_repo() {
@@ -173,12 +179,19 @@ probe_pr_visual_evidence() {
 # ---- 集計 ----
 results=$(mktemp)
 trap 'rm -f "$results"' EXIT
-for r in $repos; do
+for entry in $repos; do
+  r=${entry%%:*}
+  vis=""; [ "$entry" = "$r" ] || vis=${entry#*:}
   if ! load_repo "$r"; then
     for id in $ids; do printf '%s\t%s\tskipped\t\n' "$id" "$r" >> "$results"; done
     continue
   fi
   for id in $ids; do
+    want=$(wanted_visibility "$id")
+    if [ -n "$want" ] && [ -n "$vis" ] && [ "$want" != "$vis" ]; then
+      printf '%s\t%s\tnone\t\n' "$id" "$r" >> "$results"
+      continue
+    fi
     if out=$("probe_${id//-/_}" "$r"); then
       printf '%s\t%s\t%s\t%s\n' "$id" "$r" "${out%%:*}" "$( [ "$out" = "${out#*:}" ] || echo "${out#*:}" )" >> "$results"
     else

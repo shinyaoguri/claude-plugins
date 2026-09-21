@@ -217,13 +217,14 @@
       "id": "issue-template-exists",
       "layer": "repo",
       "level": "recommended",
+      "when": { "visibility": "public" },
       "check": { "type": "glob_exists", "path": ".github/ISSUE_TEMPLATE/*" },
       "why": "気付き・改善案を作業を止めず Issue へ残す文化の受け皿",
       "evidence": {
         "kind": "observation",
         "measured_at": "2026-09-22",
         "method": "scripts/measure-standards-usage.sh issue-template-exists (対象: 直近 90 日に push のある自分のリポ。ADR 0029)",
-        "result": "設置 21 リポ中、Issue の 1/3 以上がテンプレートの見出しに沿うのは 8 リポ。gh issue create はテンプレートを通らないので、残り 13 リポでは Issue の構成を決めているのがテンプレートではない"
+        "result": "公開リポに絞った後: 設置 10 リポ中、Issue の 1/3 以上がテンプレートの見出しに沿うのは 4 リポ (絞る前は 21 リポ中 8 リポ。gh issue create はテンプレートを通らない)。公開リポに残す理由は外部の報告者にフォームが効くことだが、外部からの Issue がほぼ無い現状ではこの測り方に現れない。次の再測定でも変わらなければ削る"
       },
       "cadence": "bootstrap",
       "fix": "改善提案などの最小テンプレートを .github/ISSUE_TEMPLATE/ に追加する",

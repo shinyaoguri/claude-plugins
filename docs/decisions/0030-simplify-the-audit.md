@@ -1,0 +1,15 @@
+# 0030: 監査と掃除の段を、守る価値のあるものだけに絞る
+
+- **状態**: 採用 (2026-09-22, Issue [#179](https://github.com/shinyaoguri/claude-plugins/issues/179) の判断)
+
+- **文脈**: repo-standards の監査は 4 段 (機械判定 → auditor → verifier → intent-judge) に加えて、安い層 (repo-audit-min) の判定を本監査へ引き継ぐ経路を持ち、`rs-findings.sh` は 1 行 9 フィールド・442 行になっていた。全体レビュー (#179) と利用の実測 ([0029](0029-measure-what-the-standard-installs.md)) で、**守っているものが小さい段**と**二重になっている段**が特定できた。どの段も足したときには理由があった。問うのは「その理由がいまも、その段の複雑さに見合っているか」である。
+
+- **決定**:
+  1. **`issue-template-exists` は公開リポだけに求める** (`when.visibility: public`)。実測で、設置 21 リポ中 Issue の構成として使われていたのは 8 リポだった — `gh issue create` で起こした Issue はテンプレートを通らず、実際の Issue は自由な見出しで書かれている。自分とエージェントしか起票しない非公開リポでは、Issue の構成は CLAUDE.md の規約が担う。公開リポに残すのは外部の報告者にフォームが効くからだが、絞った後の実測も 10 リポ中 4 リポで、外部からの Issue がほぼ無い現状ではこの理由は測定に現れない。**次の再測定でも変わらなければ削る**。
+  2. **反証 (standards-verifier) の対象は「required かつ ok と判定された項目」だけにする** ([0012](0012-audit-precision.md) 決定 5 の対象範囲を置き換え、決定 7 を廃止。決定 6 の `verified` はそのまま)。反証が守るのは、誤判定が誰にも見られないまま監査記録に残ること。ng / warn と判定された項目は修正の承認一覧と PR に出るので人が見る。人の目に入らないのは「誤って ok になった required の LLM 項目」だけである。覆って ng になった項目は反証の対象から外れるので往復が起きず、**振動の上限の規則も不要になる**。
+  3. **repo-audit-min は報告専用にし、判定を findings へ保存する経路 (`--save` / `--source` / `verdict_source` / 暫定判定の上書き保護) を畳む** ([0015](0015-verdict-provenance.md) を廃止、[0011](0011-audit-cost-tiers.md) 決定 5 の改訂を取り消し)。この経路は「min で見てそのまま fix へ進む」という任意の近道のためだけに存在し、そのために findings の全行が出自を持ち、保存のたびに保護判定が走っていた。min は安く見るための道具に戻し、直すなら本監査を通す。standards-judge は min の LLM 判定の報告に使うので残る。
+  4. **`[gone]` のローカルブランチの掃除は setup の Stop hook (`git gone-clean`) に任せ、プラグインの「マージ済み PR の head と一致を証明してから消す」パスを撤去する** ([0018](0018-provable-branch-deletion.md) の証明 (b) を撤去。(a) 既定ブランチの祖先は現行)。証明つきの削除を置いたのは gone-clean に自動実行の口が無かったからで (#99)、その口が setup の Stop hook にできてからは、毎ターン gone-clean が先に消すのでプラグイン側には候補が残らず、gh の照会コードと環境変数 2 つとテストだけが残っていた。gone-clean は証明なしに `-D` するが、消えるのは remote 側で既に消されたブランチで、PR になっていたものの内容は `refs/pull/<N>/head` に残る。PR を出さずに remote のブランチだけ消したものは残らないが、それは remote を消した時点の判断である。
+  5. **同じ判定を 2 か所に書かない**。`rs-audit-repo.sh` と `rs-audit-github.sh` に逐語的に重複していた引数解析・`when.visibility` の判定・builtin の結果のディスパッチを `rs-lib.sh` へ寄せる (github 側だけ `ok:<詳細>` の分岐が欠けており、既にずれ始めていた)。skills から呼ばれずテストだけが使っていた口 (`rs-findings.sh list` の `--status` `--layer` `--level` `--intent`・`path`、`rs-audit-min.sh --width`) と、[0022](0022-repo-standards-bundled.md) が移行期の保険とした正本の旧解決経路を削る。
+  6. **削らないもの**: SKILL.md に繰り返し出る 1 行の注意書き (「`${CLAUDE_PLUGIN_ROOT}` をそのまま書く」「不具合は report-issue へ」) は、スキル実行時にエージェントへ効くので残す。項目の統合 (`gh-squash-title-pr` と `gh-squash-body-pr` など) は id の変更が findings と setup の台帳へ波及し、減るのは 2 項目なのでやらない。intent-judge・plan-gate・worktree-sweep・env-doctor・next-task はそのまま。
+
+- **影響**: 監査は「機械判定 → auditor → (required かつ ok だけ verifier) → intent-judge → fix」になる。findings の 1 行は 9 → 8 フィールド。min の結果から直接 fix へ進めなくなる (本監査を 1 回通す必要がある) — 近道が消える代わりに、findings を読む人は出自を気にしなくてよくなる。recommended の項目が誤って ng / warn になったときは、反証ではなく fix の承認時に人が弾く。ci-watch の作り直し (#146 ほか) はこの ADR の対象外で、別の Issue 群として扱う。
