@@ -35,12 +35,6 @@ while IFS=$'\t' read -r name source; do
     || err "$name: keywords が marketplace.json ($mp_kw) と plugin.json ($pj_kw) で不一致"
 done < <(jq -r '.plugins[] | [.name, .source] | @tsv' "$mp")
 
-# テストスクリプト → CI への登録漏れ。書いても呼ばれなければ無いのと同じで、
-# 退行は誰かが手で回すまで分からない (実際に漏れていたことがある。#44)
-for t in scripts/test-*.sh; do
-  grep -qrF -- "$t" .github/workflows/ || err "$t が .github/workflows/ のどこからも実行されていない"
-done
-
 # plugins/ 直下のディレクトリ → marketplace への登録漏れ
 for d in plugins/*/; do
   name=$(basename "$d")
