@@ -37,24 +37,17 @@ jobs:
         run: ./scripts/check-deprecated-patterns.sh
       - name: 判定基準の正本のスキーマ検査 (repo-standards.json)
         run: ./scripts/check-repo-standards.sh
-      - name: 同梱スクリプトの判定テスト
+      - name: スクリプトの判定テスト (scripts/test-*.sh を全部)
+        # 列挙しない。列挙は足すたびに漏れる (#44) — 置けば走る形にして登録漏れを構造的に無くす。
+        # 1 本落ちても残りを回し、落ちたものを全部見せてから赤にする
         run: |
-          ./scripts/test-rs-audit-repo.sh
-          ./scripts/test-rs-audit-github.sh
-          ./scripts/test-rs-audit-min.sh
-          ./scripts/test-rs-evidence.sh
-          ./scripts/test-rs-findings.sh
-          ./scripts/test-rs-doctor-env.sh
-          ./scripts/test-rs-ci-watch.sh
-          ./scripts/test-rs-branch-sweep.sh
-          ./scripts/test-rs-worktree-sweep.sh
-          ./scripts/test-rs-plan-gate.sh
-          ./scripts/test-rs-plan-pass.sh
-          ./scripts/test-rs-inflight.sh
-          ./scripts/test-repo-settings.sh
-      - name: リポ側チェックスクリプトの判定テスト
-        run: |
-          ./scripts/test-intent-coverage.sh
+          fail=0
+          for t in scripts/test-*.sh; do
+            echo "::group::$t"
+            "./$t" || { fail=1; echo "::error::$t が失敗"; }
+            echo "::endgroup::"
+          done
+          exit "$fail"
 
   pr-policy:
     if: github.event_name == 'pull_request'
