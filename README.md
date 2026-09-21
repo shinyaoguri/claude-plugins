@@ -90,9 +90,9 @@ claude-plugins/
 │       ├── skills/          # スキル (各ディレクトリに SKILL.md。スラッシュコマンドもここ)
 │       ├── agents/          # サブエージェント定義 (*.md)
 │       └── hooks/           # hooks 設定
-├── .claude/skills/          # このリポの開発専用スキル (配布しない)
+├── .claude/settings.json    # このリポで作業するときの事前許可 (読み取りとテストのみ)
 ├── .github/                 # CI (ci.yml / freshness.yml)・テンプレート・Dependabot
-├── scripts/                 # 整合性・上流参照チェック (CI とローカル共用)
+├── scripts/                 # 整合性チェックと判定テスト (CI とローカル共用)・標準の利用実績の測定
 ├── docs/decisions/          # 設計判断の記録 (軽量 ADR)
 ├── upstream-refs.json       # プラグインが参照する上流パスのマニフェスト
 ├── CLAUDE.md                # 開発規約 (Claude Code 向け)
@@ -126,10 +126,6 @@ claude-plugins/
 
 ## 運用 (陳腐化防止)
 
-陳腐化を防ぐ層 (PR CI / 週次 freshness / Dependabot / 月次レビュー) の一覧と正本は [CLAUDE.md の「陳腐化防止の仕組み」](CLAUDE.md#陳腐化防止の仕組み) にある。何を層として置くかの基準は [ADR 0028](docs/decisions/0028-detection-needs-closure.md) (検知したものが必ず閉じる輪を持つこと)。
-
-月次レビューの scheduled task は各マシンで一度だけ登録する。Claude Code に次を依頼すればよい:
-
-> claude-plugins リポジトリで /portfolio-review を実行する月次のスケジュールタスクを登録して
+陳腐化を防ぐ層 (PR CI / 週次 freshness / Dependabot / 180 日ごとの利用実績の再測定) の一覧と正本は [CLAUDE.md の「陳腐化防止の仕組み」](CLAUDE.md#陳腐化防止の仕組み) にある。何を層として置くかの基準は [ADR 0028](docs/decisions/0028-detection-needs-closure.md) (検知したものが必ず閉じる輪を持つこと)。
 
 検知・提案はすべて GitHub Issue に集約される (テンプレート: 改善提案 / ドリフト報告 / プラグイン新設・統廃合の提案)。

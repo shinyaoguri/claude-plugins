@@ -1,6 +1,6 @@
 # 0020: 汎用スキルは plugin として配り、グローバルスキルは使わない
 
-- **状態**: 採用 (2026-08-16。決定 2 の判定基準は 2026-08-31 に [0021](0021-three-layer-placement.md) 決定 1 が置き換えた — 供給できるかどうかではなく、どこで発火する必要があるかで決まる)
+- **状態**: 採用 (2026-08-16。決定 2 の判定基準は 2026-08-31 に [0021](0021-three-layer-placement.md) 決定 1 が置き換えた — 供給できるかどうかではなく、どこで発火する必要があるかで決まる)。月次 portfolio-review への委任は [0029](0029-measure-what-the-standard-installs.md) で廃止
 
 - **文脈**: 「スキルは自分しか使わないのだから、marketplace のプラグインではなく [setup](https://github.com/shinyaoguri/setup) リポのグローバルスキル (`~/.claude/skills/`) として管理したほうが楽ではないか」という問いが出た。marketplace 運用には version bump・[upstream-refs.json](../../upstream-refs.json) の網羅検査・ADR といった手続きが伴う一方、setup リポは `~/.claude` への symlink なので `git pull` だけで全マシンへ反映される。
 
@@ -22,6 +22,6 @@
   3. **plugin 側へ置く判断基準**は次の 3 つで、1 つでも当たれば plugin とする: **hooks・agents・scripts を伴う** / **enable・disable の単位を持つ** / **version をまたいで伝搬を制御したい**
   4. 3 基準のいずれにも当たらないスキルが生まれたときに、この判断を再議論する
 
-- **影響**: [0009](0009-plugin-granularity.md) がプラグイン*間*の粒度を決めるのに対し、この ADR はその一段上 —「plugin として配るか否か」— を決める。月次の [portfolio-review](../../.claude/skills/portfolio-review/SKILL.md) で新設・統廃合を判断するときは、まずこの 3 基準で plugin 化の可否を見てから 0009 の粒度に進む。
+- **影響**: [0009](0009-plugin-granularity.md) がプラグイン*間*の粒度を決めるのに対し、この ADR はその一段上 —「plugin として配るか否か」— を決める。月次の portfolio-review (0029 で廃止) で新設・統廃合を判断するときは、まずこの 3 基準で plugin 化の可否を見てから 0009 の粒度に進む。
 
   この決定は「自分しか使わない」前提の下でも成り立つ点が肝で、marketplace を選ぶ理由を配布 (他人に配る) に置いていない。したがって将来スキルを公開する・しないの判断が変わっても、この ADR を見直す必要はない。

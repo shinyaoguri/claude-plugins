@@ -1,6 +1,6 @@
 # 0004: 公式非推奨のプラグイン構成を排除し、CI で機械的に禁止する
 
-- **状態**: 採用 (2026-08-02)
+- **状態**: 採用 (2026-08-02)。非推奨リストの鮮度を月次 portfolio-review に委ねた部分は [0029](0029-measure-what-the-standard-installs.md) で付け替え — setup の claude-upstream-review が changelog から拾う
 - **文脈**: 公式ドキュメント (code.claude.com/docs) との突き合わせ監査で、公式が非推奨・廃止と明言する構成パターンが複数あることを確認した。このリポジトリでは (a) version の二重指定 (対処済み: [0003](0003-version-policy.md))、(b) スラッシュコマンドの `commands/` 配置 — 公式リファレンスは commands/ を互換維持と位置づけ "Use `skills/` for new plugins" と明記 — が該当した。公式の非推奨は今後も増えるため、都度の人手レビューでは同種の逸脱が再発する。[0002](0002-freshness-architecture.md) の方針どおり決定論的な仕組みへ寄せる。
 - **決定**:
   - スラッシュコマンドも `skills/<name>/SKILL.md` として作る。既存 4 コマンド (contract-check / quick-issue / metaphor-doctor / metaphor-new) は skills へ移行 (呼び出し名・挙動は不変。frontmatter に `name` を明示)

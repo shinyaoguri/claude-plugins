@@ -1,6 +1,6 @@
 # 0009: プラグインの粒度は enable/disable と version の単位で決める
 
-- **状態**: 採用 (2026-08-05, Issue #37 の判断)
+- **状態**: 採用 (2026-08-05, Issue #37 の判断)。統廃合の判断を月次 portfolio-review に委ねた部分は [0029](0029-measure-what-the-standard-installs.md) で付け替え — 定期の層を持たず、必要になったとき plugin-proposal の Issue で起こす
 - **文脈**: gyazo-capture スキル (スクリーンショットの Gyazo ホスト手順) が repo-standards プラグインに同居していることを「関心の分離」の観点で問題視した ([#37](https://github.com/shinyaoguri/claude-plugins/issues/37))。#32 で汎用スキルの供給を marketplace へ一本化した際の意図的なトレードオフだったが、plugin description が「監査・雛形生成」と「スクショのホスト手順」の 2 本立てになっていた。分離の根拠として挙がったのは (a) description・keywords の凝集度と検索性、(b) スキル自動起動の判定精度への寄与、の 2 点。
 
   検証の結果:
@@ -17,4 +17,4 @@
   3. **gyazo-capture の用途は Issue・PR への添付に限る**。汎用スクリーンショットユーティリティへは育てない (グローバル CLAUDE.md の「GUI を伴う作業は Issue・PR にスクショを添え、リポジトリに画像をコミットしない」の実行手段という位置づけ)
   4. 次のいずれかに当たったら分離を再議論する: **片方だけ無効化したいマシン・用途が出た** / **gyazo-capture が Issue・PR 添付以外の文脈で育ち始めた** / **repo-standards のスキルが 8 個を超えた** (現在 5 個)
 
-- **影響**: #37 をクローズする。月次の [portfolio-review](../../.claude/skills/portfolio-review/SKILL.md) の統廃合判断はこの ADR を基準にし、同じ議論を毎月蒸し返さない。今後 marketplace に別スキルを同居させるかの判断も同じ基準で決める。
+- **影響**: #37 をクローズする。月次の portfolio-review (0029 で廃止) の統廃合判断はこの ADR を基準にし、同じ議論を毎月蒸し返さない。今後 marketplace に別スキルを同居させるかの判断も同じ基準で決める。
