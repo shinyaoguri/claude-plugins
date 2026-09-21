@@ -44,7 +44,7 @@ resolve_standards() {
 # emit <id> <layer> <level> <status> <detail> [fix] [fix_kind]
 # fix_kind は修正の性質 (deterministic / generative / destructive) を正本が宣言するための
 # 任意フィールド。修正側 (repo-audit-fix) の承認粒度がこれで決まる。正本がまだ持たない
-# 項目では空になり出力から落ちる — 値の妥当性は scripts/test-repo-standards.sh が守る
+# 項目では空になり出力から落ちる — 値の妥当性は scripts/check-repo-standards.sh が守る
 emit() {
   jq -cn --arg id "$1" --arg layer "$2" --arg level "$3" --arg status "$4" \
     --arg detail "$5" --arg fix "${6:-}" --arg fix_kind "${7:-}" \

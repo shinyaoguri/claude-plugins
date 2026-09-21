@@ -313,6 +313,11 @@ assert_am env-automode-defaults required/ok "配列でない設定は対象外" 
 # autoMode 自体が無ければ $defaults の欠落は起こりえない (ng と skip を区別する)
 assert_am env-automode-defaults required/skip "autoMode ブロックが無い" '{"model":"opus"}'
 assert_am env-automode-defaults required/skip "settings.json が壊れている" '{"autoMode":'
+# 読めないときは同じ節の残り 3 項目も skip として出す。無言で出力から消えると、
+# 「検査して問題なし」と「検査できなかった」の区別が付かない
+assert_am env-automode-environment recommended/skip "settings.json が壊れている" '{"autoMode":'
+assert_am env-automode-configured recommended/skip "settings.json が壊れている" '{"autoMode":'
+assert_am env-ask-checkpoints recommended/skip "settings.json が壊れている" '{"autoMode":'
 
 # environment が既定のままだと、分類器が信頼するのは cwd とそのリポの remote だけ
 assert_am env-automode-environment recommended/ok "固有の記述がある" "$kept"

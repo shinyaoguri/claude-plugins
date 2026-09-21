@@ -24,7 +24,7 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
    bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-evidence.sh
    ```
 
-   この出力を **standards-judge サブエージェント 1 本**にそのまま渡す (Agent ツール、`subagent_type: "repo-standards:standards-judge"`)。**項目ごとに分けず 1 本にまとめる** — サブエージェントは 1 本ごとに固定の初期コンテキストを払うので、6 本に割るとその分だけ丸ごと重複する。プロンプトは材料の全文だけでよく、判定基準と使うモデルはエージェント側が持っている
+   この出力を **standards-judge サブエージェント 1 本**にそのまま渡す (Agent ツール、`subagent_type: "repo-standards:standards-judge"`)。**項目ごとに分けず 1 本にまとめる** — サブエージェントは 1 本ごとに固定の初期コンテキストを払うので、項目ごと (8 本) に割るとその分だけ丸ごと重複する。プロンプトは材料の全文だけでよく、判定基準と使うモデルはエージェント側が持っている
 
 3. 2 つの出力を続けて提示する。**機械判定の出力はそのまま貼る (要約・再構成・表への整形をしない)**。LLM 判定はエージェントが返した `<id>\t<verdict>\t<根拠>` を 1 行ずつ `<verdict> <id>  <根拠>` の形に直して並べ、末尾に判定込みの件数を 1 行足す
 
@@ -61,7 +61,7 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
 - **反証・衝突判定をしない**。この 2 つは本監査の作法で、暫定判定は反証待ちにも数えない
 - **修正の提案・適用をしない**。逸脱の指摘までで止める (修正は repo-audit-fix の担当)
 
-**定期的に見直すだけなら `--cadence drift`** を付けると、作業そのものが状態を崩していく 13 項目 (ブランチの取り残し・ADR の遅れ・allow や worktree の溜まり等) に絞れる。既定は全件で、リポジトリを初めて見るときの設置漏れを隠さない ([ADR 0025](https://github.com/shinyaoguri/claude-plugins/blob/main/docs/decisions/0025-cadence-bootstrap-vs-drift.md))。
+**定期的に見直すだけなら `--cadence drift`** を付けると、作業そのものが状態を崩していく 12 項目 (ブランチの取り残し・ADR の遅れ・allow の溜まり等) に絞れる。既定は全件で、リポジトリを初めて見るときの設置漏れを隠さない ([ADR 0025](https://github.com/shinyaoguri/claude-plugins/blob/main/docs/decisions/0025-cadence-bootstrap-vs-drift.md))。
 
 これらが要るなら repo-audit スキル (本監査) を使う。判定項目そのものの正本は `${CLAUDE_PLUGIN_ROOT}/repo-standards.json` で、項目の追加・変更はこのリポジトリへの PR で行う (ADR 0022)。判定の出自と上書き規則は [ADR 0015](https://github.com/shinyaoguri/claude-plugins/blob/main/docs/decisions/0015-verdict-provenance.md)。
 

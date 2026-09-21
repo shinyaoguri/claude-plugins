@@ -182,6 +182,17 @@ out=$(printf '{"cwd":"%s"}' "$repo" | RS_BRANCH_SWEEP_GONE_MAX=1 "$hook" 2>/dev/
 check "上限まで削除したら打ち切る" "main,pr-b" "$(branches)"
 check "残りを報告する" "1" "$(printf '%s' "$out" | grep -c '1 本残っています')"
 
+# 上限は「消せた本数」でなく「照会した本数」で数える。マージ済み PR と一致しない [gone] が
+# 並ぶと 1 本も消せないので、消せた本数で数えると照会が止まらず SessionStart の timeout を食う
+setup_repo gone-cap-unmatched
+gone_branch no-pr-a
+gone_branch no-pr-b
+gone_branch no-pr-c
+out=$(printf '{"cwd":"%s"}' "$repo" | RS_BRANCH_SWEEP_GONE_MAX=1 "$hook" 2>/dev/null)
+check "一致しない [gone] が並んでも照会は上限で止まる" "1" "$(wc -l < "$GH_STUB_LOG" | tr -d ' ')"
+check "一致しない [gone] は残す" "main,no-pr-a,no-pr-b,no-pr-c" "$(branches)"
+check "照会しなかった残りを報告する" "1" "$(printf '%s' "$out" | grep -c '2 本残っています')"
+
 # --- 異常系 ---
 printf '{"cwd":"%s/does-not-exist"}' "$sandbox" | "$hook" >/dev/null 2>&1
 check "git リポでない cwd でも exit 0" "0" "$?"

@@ -235,8 +235,6 @@ builtin_scheduled_workflow_exists() {
   grep -qhE '^\s*schedule:' $files && echo ok || echo fail
 }
 
-# GitHub Flow「main が唯一の長命ブランチ」の検査。作業中ブランチと区別がつかないため
-# 最終コミットから 30 日以上動いていないものだけを残骸とみなす
 # 秘密ファイルが追跡対象に入っていないか。履歴の書き換えは不可逆なので検出のみ
 builtin_no_committed_secrets() {
   local hits

@@ -3,11 +3,12 @@
 # 逸脱した項目 (ng / warn) を 1 行ずつに圧縮して報告する。LLM 判定 (status: manual) には
 # 踏み込まず件数だけ数える。
 #
-#   bash rs-audit-min.sh [--no-github] [--width N] [--save]
+#   bash rs-audit-min.sh [--no-github] [--width N] [--save] [--cadence bootstrap|drift]
 #
 #     --no-github  gh api を使う層② (GitHub 設定) を丸ごと省く。オフライン・未認証時や
 #                  ローカル構成だけ見たいときに使う
 #     --width N    detail の切り詰め幅 (既定 60 文字)。0 で detail を出さない
+#     --cadence C  その cadence の項目だけに絞る (drift = 作業が状態を崩していく項目。ADR 0025)
 #     --save       機械判定を findings へ保存し、修正フロー (repo-audit-fix) へ
 #                  引き渡せるようにする。出力は圧縮テキストのまま (保存の副作用だけ足す)
 #
@@ -96,7 +97,7 @@ printf '%s\n' "$raw" | jq -sr --argjson w "$width" --argjson save "$save" --argj
                 end)))
     + [ "ok=\($c.ok // 0) ng=\($c.ng // 0) warn=\($c.warn // 0) blocked=\($c.blocked // 0) skip=\($c.skip // 0) manual=\($c.manual // 0)" ]
     + [ "次: "
-        + (if $nomanifest then "正本 repo-standards.json が無い — setup リポのセットアップが先"
+        + (if $nomanifest then "正本 repo-standards.json が無い — プラグインの配布が壊れている。/plugin update repo-standards@shinyaoguri で入れ直す"
            # 監査でなく生成の段階。修正フローへ送っても、リポの実体を材料にする
            # 生成的 fix (README・CLAUDE.md・CI) が空虚な雛形にしかならない
            elif $uninit then "コミットがまだ無い — 監査でなく雛形生成の段階。/repo-bootstrap で作る"

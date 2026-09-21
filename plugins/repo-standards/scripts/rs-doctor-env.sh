@@ -256,7 +256,11 @@ if [ "$settings_valid" -eq 1 ]; then
       "settings.json の permissions.ask に削除系のチェックポイントを置く。ask ルールは分類器より前に評価され、auto モードでも必ずプロンプトになる"
   fi
 else
+  # 読めないときも 4 項目すべてを skip で出す (無言で消えると「問題なし」と区別が付かない)
   emit env-automode-defaults env required skip "settings.json が壊れているため autoMode を読めない"
+  for id in env-automode-environment env-automode-configured env-ask-checkpoints; do
+    emit "$id" env recommended skip "settings.json が壊れているため判定できない"
+  done
 fi
 
 # ---- 8. gh トークンが管理権限を持っていないか ----
