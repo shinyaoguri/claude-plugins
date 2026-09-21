@@ -1,58 +1,16 @@
 #!/usr/bin/env bash
-# 上流リポ参照 (upstream-refs.json) の検査。要 jq、--exists は要 gh (認証済み or GH_TOKEN)。
+# 上流リポ参照 (upstream-refs.json) の実在検査。要 jq と gh (認証済み or GH_TOKEN)。
 #
-#   --coverage : plugins/**/*.md から上流パス風トークンを抽出し、全トークンが
-#                upstream-refs.json のいずれかのエントリに含まれるか検査 (PR CI 用)。
-#                プラグイン本文に新しい上流参照を書いたのにマニフェスト追記を忘れる事故を防ぐ。
-#   --exists   : upstream-refs.json の各エントリが上流リポの default branch に
-#                実在するか検査 (週次 freshness 用)。上流のリネーム・削除ドリフトを検知する。
+# upstream-refs.json の各エントリが上流リポの default branch に実在するかを見る
+# (週次 freshness 用)。上流のリネーム・削除ドリフトを検知する。
+# プラグイン本文のトークンとマニフェストを突き合わせる --coverage は撤去した (ADR 0028)。
 #
 # エントリの書式: "path" = 完全一致 / "dir/" = プレフィックス一致 / "*" を含む = glob パターン
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 manifest=upstream-refs.json
-mode="${1:---coverage}"
 fail=0
-
-# 上流ドキュメント・実装ファイルを指す典型トークン。プラグインの語彙が増えたらここも育てる。
-# .ya?ml は個別列挙せず総称で拾う (ansible の playbook・Issue テンプレート・ワークフローと
-# 種類が増え続けるため。誤爆したら ignore_re 側で落とす)
-token_re='(CONTRACT\.md|AGENTS\.md|DEVELOPMENT\.md|CLAUDE\.md|llms[a-z-]*\.txt|examples-index\.(md|json)|docs/ai/[A-Za-z0-9._/-]+|docs/[a-z-]+\.md|scripts/[A-Za-z0-9_-]+\.sh|check-contract[a-z-]*\.sh|[A-Za-z][A-Za-z0-9]*\.swift|[a-z.-]+\.schema\.json|templates\.json|[A-Za-z0-9_.-]+\.ya?ml|ShaderSources|Shaders/Metal)'
-# 上流リポの実体ではなく一般名詞として本文に現れるトークン (marker ファイルや生成物の例示。
-# metaphor 系プラグインの撤去で、これらを上流の実体として指す参照は無くなった) と、
-# プラグイン同梱スクリプト (rs- プレフィックス。repo-standards の ${CLAUDE_PLUGIN_ROOT}/scripts/)
-ignore_re='^(Package\.swift|llms\.txt|scripts/rs-[a-z-]+\.sh)$'
-
-# 同梱ファイル (plugins/ 配下に実体があるもの) は定義上「上流リポへの参照」ではないので
-# マニフェスト登録を求めない。ignore_re の列挙を増やさずに済ませるための一般則で、
-# hooks/scripts/*.sh のように rs- プレフィックスを持たない同梱物もここで落ちる
-bundled() {
-  [ -n "$(find plugins -path "*/$1" -print -quit 2>/dev/null)" ]
-}
-
-coverage() {
-  local entries tokens t hit e count=0
-  entries=$(jq -r '.[] | .[]' "$manifest")
-  # トークンが 1 件も無いとき grep は exit 1 を返す。検出 0 件は異常ではないので握って続行する
-  # (握らないと「NG も OK も出さずに exit 1」という判別不能な落ち方になる)
-  tokens=$(grep -rhoE "$token_re" plugins --include='*.md' | sort -u) || tokens=''
-  [ -n "$tokens" ] && count=$(wc -l <<<"$tokens" | tr -d ' ')
-  while IFS= read -r t; do
-    [ -n "$t" ] || continue
-    [[ "$t" =~ $ignore_re ]] && continue
-    bundled "$t" && continue
-    hit=0
-    while IFS= read -r e; do
-      case "$e" in *"$t"*) hit=1; break ;; esac
-    done <<<"$entries"
-    if [ "$hit" -eq 0 ]; then
-      echo "NG: プラグイン本文が参照する「${t}」が $manifest に無い (該当箇所: $(grep -rlE "$token_re" plugins --include='*.md' | xargs grep -l "$t" | paste -sd, -))" >&2
-      fail=1
-    fi
-  done <<<"$tokens"
-  [ "$fail" -eq 0 ] && echo "OK: coverage (${count} トークン検査)"
-}
 
 # $1=エントリ $2=ツリー内パス
 match() {
@@ -91,9 +49,9 @@ exists() {
   [ "$fail" -eq 0 ] && echo "OK: exists"
 }
 
-case "$mode" in
-  --coverage) coverage ;;
-  --exists)   exists ;;
-  *) echo "usage: $0 [--coverage|--exists]" >&2; exit 2 ;;
+# 旧 CI や手元の癖で渡される --exists は受け付ける (唯一のモードなので意味は変わらない)
+case "${1:---exists}" in
+  --exists) exists ;;
+  *) echo "usage: $0 [--exists]" >&2; exit 2 ;;
 esac
 exit "$fail"

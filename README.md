@@ -130,7 +130,7 @@ claude-plugins/
 
 | 層 | 実行 | 内容 |
 |---|---|---|
-| PR CI | 自動 ([ci.yml](.github/workflows/ci.yml)) | validate・整合性・公式非推奨パターン・version bump・マニフェスト網羅 |
+| PR CI | 自動 ([ci.yml](.github/workflows/ci.yml)) | validate・整合性・公式非推奨パターン・version bump・スクリプトの判定テスト |
 | 週次 | 自動 ([freshness.yml](.github/workflows/freshness.yml)) | 上流参照の実在・リンク切れ → label:freshness の Issue へ起票 |
 | 月次 | ローカル scheduled task | [portfolio-review](.claude/skills/portfolio-review/SKILL.md) スキルで利用状況・意味的ドリフト・仕組み自体を俯瞰レビュー |
 

@@ -5,7 +5,7 @@
 ## 設計原則
 
 - プラグインは上流正典ドキュメントへの**薄いルーター**。正典の内容を複製しない (ADR [0001](docs/decisions/0001-thin-router.md))
-- プラグイン本文に上流リポのパス・ファイル参照を書き足したら [upstream-refs.json](upstream-refs.json) にも追記する (PR CI の coverage チェックが漏れを検出する)
+- プラグイン本文に上流リポのパス・ファイル参照を書き足したら [upstream-refs.json](upstream-refs.json) にも追記する (週次 freshness が上流での実在を検査する。追記漏れを PR CI では検出しない — ADR [0028](docs/decisions/0028-detection-needs-closure.md))
 - 公式が非推奨とする構成は使わない (ADR [0004](docs/decisions/0004-deprecation-guard.md)、`scripts/check-deprecated-patterns.sh` が CI で強制)。スラッシュコマンドも `commands/` でなく `skills/<name>/SKILL.md` として作る
 - 汎用スキルは `~/.claude/skills/` でなく **plugin として配る** (ADR [0020](docs/decisions/0020-skills-ship-as-plugins.md))。hooks・agents・scripts を同じ単位に束ねられ、enable/disable と version で伝搬を制御できるのはプラグインだけ
 - プラグインの粒度は **enable/disable と version の単位**で決める (ADR [0009](docs/decisions/0009-plugin-granularity.md))。description の凝集度だけを理由に分割しない (スキルの起動判定は SKILL.md の description のみを見るため、分割しても起動精度は変わらない)
@@ -14,7 +14,7 @@
 
 - `claude plugin validate` は**各プラグインディレクトリに対して**実行する。ルートへの validate は marketplace.json しか見ず、SKILL.md frontmatter の YAML 破損を検出できない
 - SKILL.md の frontmatter description は必ずクォートする (裸の `: ` が混ざると YAML パースが落ち、メタデータ全体が無視される)
-- CI と同じチェックはローカルで `scripts/check-consistency.sh` / `scripts/check-deprecated-patterns.sh` / `scripts/check-version-bump.sh` / `scripts/check-upstream-refs.sh --coverage` として実行できる。これらと `scripts/test-*.sh`・`claude plugin validate`・gh の参照系は [.claude/settings.json](.claude/settings.json) で事前許可してあり確認プロンプトが出ない。**破壊的・外部影響のあるコマンド (`git push` / `gh pr merge` / `gh issue create` / `apply-repo-settings.sh --apply` 等) は allow に入れない**
+- CI と同じチェックはローカルで `scripts/check-consistency.sh` / `scripts/check-deprecated-patterns.sh` / `scripts/check-version-bump.sh` として実行できる。これらと `scripts/test-*.sh`・`claude plugin validate`・gh の参照系は [.claude/settings.json](.claude/settings.json) で事前許可してあり確認プロンプトが出ない。**破壊的・外部影響のあるコマンド (`git push` / `gh pr merge` / `gh issue create` / `apply-repo-settings.sh --apply` 等) は allow に入れない**
 - GitHub のリポジトリ設定は [.github/repo-settings.json](.github/repo-settings.json) が正本。**設定は GitHub の画面や gh コマンドで直接変えず、この JSON を変える PR として出す** (ADR [0008](docs/decisions/0008-repo-settings-as-code.md))。適用は `scripts/apply-repo-settings.sh --apply`、差分検査は引数なし。**admin 権限のあるトークンで実行する** (CI の GITHUB_TOKEN では管理系フィールドが読めないため CI では回さない)
 - プラグイン同梱スクリプトの判定ロジックは `scripts/test-rs-*.sh` (対象スクリプトごとに 1 本) でテストする。一時 git リポと最小 manifest を組み立て、出力 (JSON Lines) の status を検証するエンドツーエンド方式 (正本との出力契約ごと守るため、関数を source しない)。同梱フック (`hooks/scripts/`) も同じ流儀で、検証対象は Claude Code との契約である**終了コードと、フックが返す判定** (Stop 系は stderr、PreToolUse は stdout の `permissionDecision`) になる (`gh` はスタブに差し替え、GitHub にも Claude セッションにも触らない)
 - エージェントの振る舞いを縛るフックは各リポにコミットせず、`repo-standards` プラグインが `hooks/hooks.json` で供給する (ADR [0016](docs/decisions/0016-agent-behavior-hooks-in-plugin.md))。個人標準 (`repo-standards.json`) には項目を足さない
@@ -37,7 +37,7 @@
 
 | 層 | 実行 | 正本 |
 |---|---|---|
-| PR CI | validate + 整合性 + 非推奨パターン + version bump + マニフェスト網羅 + スクリプトの判定テスト | [.github/workflows/ci.yml](.github/workflows/ci.yml) |
+| PR CI | validate + 整合性 + 非推奨パターン + version bump + スクリプトの判定テスト | [.github/workflows/ci.yml](.github/workflows/ci.yml) |
 | 週次 | 上流参照の実在 + setup の意図の台帳との突き合わせ (フック・スキルが台帳に載っているか。ADR [0027](docs/decisions/0027-intents-ledger-cross-repo-coverage.md)) + リンク切れ → Issue 起票 | [.github/workflows/freshness.yml](.github/workflows/freshness.yml) |
 | 週次 | GitHub Actions の更新 (patch/minor は CI green で自動マージ、major は `manual-review` ラベル) | [.github/workflows/dependabot-auto-merge.yml](.github/workflows/dependabot-auto-merge.yml) (ADR [0005](docs/decisions/0005-dependabot-auto-merge.md)) |
 | 月次 | 利用状況・意味的ドリフト・仕組み自体の俯瞰レビュー | [.claude/skills/portfolio-review/](.claude/skills/portfolio-review/SKILL.md) |
