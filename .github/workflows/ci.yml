@@ -4,13 +4,12 @@ name: CI
 
 on:
   pull_request:
-    # edited/labeled/unlabeled も対象: pr-policy はタイトルとラベルから期待 bump を
-    # 導出するため、それらの変更でも再検査が必要
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    # edited も対象: pr-policy は PR タイトルを lint するため、タイトルの変更でも再検査が必要
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 
-# push 直後にタイトル編集やラベル付けをすると synchronize と edited で run が二重に立つ。
+# push 直後にタイトルを編集すると synchronize と edited で run が二重に立つ。
 # PR 単位 (main への push はブランチ単位) で 1 本に絞る
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -62,12 +61,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PR_TITLE: ${{ github.event.pull_request.title }}
-      PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: PR タイトルの Conventional Commits lint
         run: ./scripts/check-pr-title.sh
-      - name: version bump の検査 (タイトル type / release:* ラベルから期待増分を導出)
+      - name: version bump の検査 (plugins/ に差分があれば bump 済みであること)
         run: BASE_REF=origin/${{ github.base_ref }} ./scripts/check-version-bump.sh

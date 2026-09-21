@@ -24,8 +24,7 @@
 
 - version の正は各 plugin.json のみ。**marketplace.json には version を書かない** (plugin.json が無警告で優先されるため公式非推奨。CI が検査)
 - **version を bump しないマージは他マシンへ伝搬しない** (クライアントは version 比較で更新判定する)
-- `plugins/<name>/` を触る PR は type を **feat (→ minor) / fix (→ patch)** に限定し、同じ PR 内で `scripts/bump-version.sh <name> <minor|patch>` で bump する。CI (pr-policy) が期待増分との完全一致を強制
-- **major は自動判定しない**。スキル・コマンドの削除/リネーム、hook の非互換変更、プラグイン統廃合などの破壊的変更は `release:major` ラベルで宣言する (`release:minor|patch|skip` での上書きも可。metaphor と同じ規約で、`!` 付きタイトルは type どおりに扱う)
+- `plugins/<name>/` を触る PR は、同じ PR 内で `scripts/bump-version.sh <name> <major|minor|patch>` で bump する。CI (pr-policy) が見るのは「bump 済みか」だけで、増分は人が選ぶ: 機能追加 minor / 修正 patch / 破壊的変更 (スキルの削除・リネーム、hook の非互換変更、プラグイン統廃合) major (ADR [0028](docs/decisions/0028-detection-needs-closure.md))
 
 ## 記録規約 (メモリリセット耐性)
 
