@@ -40,7 +40,7 @@
 |---|---|---|
 | PR CI | validate + 整合性 + 非推奨パターン + version bump + マニフェスト網羅 + スクリプトの判定テスト | [.github/workflows/ci.yml](.github/workflows/ci.yml) |
 | PR CI (非ブロック) | 守りを弱める変更の可視化 (`guardrail-change` ラベル + コメント) | ci.yml の guardrail ジョブ (ADR [0007](docs/decisions/0007-guardrail-visibility.md)) |
-| 週次 | 上流参照の実在 + リンク切れ → Issue 起票 | [.github/workflows/freshness.yml](.github/workflows/freshness.yml) |
+| 週次 | 上流参照の実在 + setup の意図の台帳との突き合わせ (フック・スキルが台帳に載っているか。ADR [0027](docs/decisions/0027-intents-ledger-cross-repo-coverage.md)) + リンク切れ → Issue 起票 | [.github/workflows/freshness.yml](.github/workflows/freshness.yml) |
 | 週次 | GitHub Actions の更新 (patch/minor は CI green で自動マージ、major は `manual-review` ラベル) | [.github/workflows/dependabot-auto-merge.yml](.github/workflows/dependabot-auto-merge.yml) (ADR [0005](docs/decisions/0005-dependabot-auto-merge.md)) |
 | 月次 | 利用状況・意味的ドリフト・仕組み自体の俯瞰レビュー | [.claude/skills/portfolio-review/](.claude/skills/portfolio-review/SKILL.md) |
 

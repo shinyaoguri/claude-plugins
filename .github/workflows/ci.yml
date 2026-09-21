@@ -59,6 +59,7 @@ jobs:
       - name: リポ側チェックスクリプトの判定テスト
         run: |
           ./scripts/test-upstream-refs.sh
+          ./scripts/test-intent-coverage.sh
           ./scripts/test-guardrail-weakening.sh
           ./scripts/test-upsert-pr-comment.sh
 
