@@ -89,7 +89,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh summary
    chore(repo-standards): 標準の構成ファイルを追加する
 
    - gitignore-exists: リポ種別の生成物に合わせた .gitignore を追加
-     (全リポジトリで唯一共通の必須ファイル)
+     (.env や鍵を追跡から外す唯一の入口)
    - pr-template-exists: .github/pull_request_template.md を追加
      (目的・変更点・確認方法の記入漏れを防ぐ)
    ```

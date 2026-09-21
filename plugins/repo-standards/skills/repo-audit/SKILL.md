@@ -60,7 +60,9 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
 
    **`status: blocked` (前提未達で保留) の項目は別枠で必ず載せる** — 前提の id ごと (`detail` に入っている) 並べ、**`level: required` は 1 件も省かない**。恒久的に対象外の `skip` と違い、前提が埋まれば判定対象に戻る項目で、ここで落とすと required の取りこぼしが誰にも見えないまま残る (issue #97 の実害)。直す対象はこの項目ではなく前提側の項目なので、承認・適用の一覧には入れない
 
-   **機械判定を LLM 判定が覆した項目** (`summary` の `overridden`。機械が ng / warn、LLM が ok / skip) も同じ扱いで、機械の status と LLM の verdict を並べ、偽陽性と判断した根拠を載せる。機械判定の status は覆らない (事実として集計に残る) ので、レポートで根拠が読めないと「直っていないのに放置されている項目」に見える。この種の項目は `decision` を `rejected` にし、`--note` に理由を残して未決から外す`intent` が `conflicts` / `unclear` の項目は**理由をそのまま載せる** — 「標準には合っていないが、このリポではこう決めている」が読み取れる形にする。末尾に `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh summary` の集計 (必須 NG / 推奨 WARN / 意図と衝突 / 未決 / 反証待ち / skip)
+   **機械判定を LLM 判定が覆した項目** (`summary` の `overridden`。機械が ng / warn、LLM が ok / skip) も同じ扱いで、機械の status と LLM の verdict を並べ、偽陽性と判断した根拠を載せる。機械判定の status は覆らない (事実として集計に残る) ので、レポートで根拠が読めないと「直っていないのに放置されている項目」に見える。この種の項目は `decision` を `rejected` にし、`--note` に理由を残して未決から外す
+
+   `intent` が `conflicts` / `unclear` の項目は**理由をそのまま載せる** — 「標準には合っていないが、このリポではこう決めている」が読み取れる形にする。末尾に `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh summary` の集計 (必須 NG / 推奨 WARN / 意図と衝突 / 未決 / 反証待ち / skip)
 
    **linked worktree を使っているリポ** (`git worktree list` が 2 行以上) では、レポートの末尾に env-doctor スキルの実行を促す。別 worktree への誤書き込みを止めるガードはマシン側の `~/.claude/settings.json` に登録されるもので、**リポの監査では実在を確認できない** — 登録されていても実体が欠けていれば無音で効かず、「ガードがある前提」で worktree を跨いだ作業が無防備なまま進む (env-doctor の `env-hook-missing-*` / `env-hook-not-executable-*` が検知する)。**項目としては持たない**: worktree はマシン 1 台の事実で、リポ層に置くと全リポぶん同じ判定を繰り返すことになる ([ADR 0026](https://github.com/shinyaoguri/claude-plugins/blob/main/docs/decisions/0026-machine-state-out-of-repo-audit.md))
 

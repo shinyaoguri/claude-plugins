@@ -62,6 +62,7 @@ done < <(
 # ---- パス 2: [gone] かつマージ済み PR の head と一致 ----
 # 候補の抽出はタブ区切りで行う (worktreepath に空白が入りうるので最後に置く)。
 gone_deleted=0
+gone_asked=0
 gone_over=0
 gone_max=${RS_BRANCH_SWEEP_GONE_MAX:-10}
 if [ "${RS_BRANCH_SWEEP_GONE:-1}" != "0" ]; then
@@ -73,10 +74,11 @@ if [ "${RS_BRANCH_SWEEP_GONE:-1}" != "0" ]; then
     while IFS=$'\t' read -r branch tip; do
       [ -n "$branch" ] && [ -n "$tip" ] || continue
       # 待たせすぎないよう 1 セッションの照会数を打ち切る (残りは git gone で棚卸し)
-      if [ "$gone_deleted" -ge "$gone_max" ]; then
+      if [ "$gone_asked" -ge "$gone_max" ]; then
         gone_over=$((gone_over + 1))
         continue
       fi
+      gone_asked=$((gone_asked + 1))
       json=$(gh pr list --head "$branch" --state merged --limit 5 --json headRefOid 2>/dev/null) || continue
       printf '%s' "$json" | jq -e --arg tip "$tip" 'map(.headRefOid) | index($tip)' >/dev/null 2>&1 || continue
       git branch -D "$branch" >/dev/null 2>&1 && gone_deleted=$((gone_deleted + 1))
