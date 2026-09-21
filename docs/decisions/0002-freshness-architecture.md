@@ -1,6 +1,6 @@
 # 0002: 陳腐化防止は 4 層構成とし、文書ルールより決定論的な仕組みを優先する
 
-- **状態**: 採用 (2026-08-02)
+- **状態**: 一部廃止 (2026-09-22)。「文書ルールより決定論的な仕組みを優先する」は現行。層の表は下の決定時点のもので、**現行の層は [CLAUDE.md](../../CLAUDE.md) の「陳腐化防止の仕組み」が正本**。マニフェストの coverage チェックは廃止 (→ [0028](0028-detection-needs-closure.md))。月次の俯瞰レビューは回った実績が無く、[#179](https://github.com/shinyaoguri/claude-plugins/issues/179) で扱いを見直し中
 - **文脈**: 薄いルーター設計 ([0001](0001-thin-router.md)) の帰結として、上流参照のドリフトが最大の陳腐化リスク。加えて (a) SKILL.md frontmatter の YAML 破損は `claude plugin validate <plugin-dir>` でしか検出できない、(b) marketplace.json ↔ plugin.json の version 不整合、(c) 仕組み (CI・CLAUDE.md・スキル) 自体の陳腐化、という壊れ方がある。文書ルールだけでは守られる保証がないため、強制できるものは仕組みへ寄せる。
 - **決定**: 次の 4 層で防止する。
   | 層 | 実行 | 担当 |

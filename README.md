@@ -8,7 +8,7 @@
 |---|---|---|
 | [repo-standards](plugins/repo-standards) | 自分の全リポジトリと各マシン | 個人の開発運用標準 (同梱の repo-standards.json が正本、[ADR 0022](docs/decisions/0022-repo-standards-bundled.md)) — リポジトリ構成・GitHub 設定・マシン環境の監査と雛形生成、作業の記録 (Issue・PR へのスクショ添付・気付きの起票) の作法、`/repo-audit` `/repo-audit-min` `/repo-audit-fix` `/env-doctor` `/repo-bootstrap` `/gyazo-capture` `/report-issue` `/next-task` (skill 8)、push した PR の CI が赤いまま終わらせない見届けと、合意なしに実装が広がるのを止めるプランゲート (hook 7、[ADR 0016](docs/decisions/0016-agent-behavior-hooks-in-plugin.md) / [0017](docs/decisions/0017-approval-at-the-plan.md)) |
 
-対象リポジトリの正典ドキュメント (CLAUDE.md ほか) と個人標準の正本を複製せず、「いつ・何を読むか」を想起させる薄いルーターとして設計している (ドリフト防止、[ADR 0001](docs/decisions/0001-thin-router.md))。
+個人標準の正本 (repo-standards.json) と、それを判定するスクリプト・フックを同梱している ([ADR 0022](docs/decisions/0022-repo-standards-bundled.md))。上流に正典があるもの (対象リポジトリの CLAUDE.md ほか) は内容を複製せず、場所と読み方だけを書く ([ADR 0001](docs/decisions/0001-thin-router.md))。
 
 ### リポジトリ監査スキルの使い分けとトークン目安
 
@@ -126,13 +126,7 @@ claude-plugins/
 
 ## 運用 (陳腐化防止)
 
-プラグインは上流ドキュメントへの薄いルーターのため、上流の変化への追従が保守の中心。仕組みの設計は [docs/decisions/0002](docs/decisions/0002-freshness-architecture.md)、開発時の規約は [CLAUDE.md](CLAUDE.md) を参照。
-
-| 層 | 実行 | 内容 |
-|---|---|---|
-| PR CI | 自動 ([ci.yml](.github/workflows/ci.yml)) | validate・整合性・公式非推奨パターン・version bump・スクリプトの判定テスト |
-| 週次 | 自動 ([freshness.yml](.github/workflows/freshness.yml)) | 上流参照の実在・リンク切れ → label:freshness の Issue へ起票 |
-| 月次 | ローカル scheduled task | [portfolio-review](.claude/skills/portfolio-review/SKILL.md) スキルで利用状況・意味的ドリフト・仕組み自体を俯瞰レビュー |
+陳腐化を防ぐ層 (PR CI / 週次 freshness / Dependabot / 月次レビュー) の一覧と正本は [CLAUDE.md の「陳腐化防止の仕組み」](CLAUDE.md#陳腐化防止の仕組み) にある。何を層として置くかの基準は [ADR 0028](docs/decisions/0028-detection-needs-closure.md) (検知したものが必ず閉じる輪を持つこと)。
 
 月次レビューの scheduled task は各マシンで一度だけ登録する。Claude Code に次を依頼すればよい:
 

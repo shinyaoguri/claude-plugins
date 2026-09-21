@@ -42,5 +42,12 @@ for d in plugins/*/; do
     || err "plugins/$name が marketplace.json に未登録"
 done
 
+# ADR → 索引への掲載漏れ。索引は「読むべき本数を減らす」ためのものなので、載っていない
+# ADR があると現行か廃止かが分からなくなる
+for a in docs/decisions/[0-9]*.md; do
+  grep -qF "($(basename "$a"))" docs/decisions/README.md \
+    || err "$(basename "$a") が docs/decisions/README.md の索引に載っていない"
+done
+
 [ "$fail" -eq 0 ] && echo "OK: consistency"
 exit "$fail"
