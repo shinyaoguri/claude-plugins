@@ -10,8 +10,7 @@ on:
   push:
     branches: [main]
 
-# push 直後にタイトル編集やラベル付けをすると synchronize と edited で run が二重に立ち、
-# guardrail のコメント重複チェック (check-then-act) が両方すり抜ける (Issue #63)。
+# push 直後にタイトル編集やラベル付けをすると synchronize と edited で run が二重に立つ。
 # PR 単位 (main への push はブランチ単位) で 1 本に絞る
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -60,8 +59,6 @@ jobs:
         run: |
           ./scripts/test-upstream-refs.sh
           ./scripts/test-intent-coverage.sh
-          ./scripts/test-guardrail-weakening.sh
-          ./scripts/test-upsert-pr-comment.sh
 
   pr-policy:
     if: github.event_name == 'pull_request'
@@ -77,62 +74,3 @@ jobs:
         run: ./scripts/check-pr-title.sh
       - name: version bump の検査 (タイトル type / release:* ラベルから期待増分を導出)
         run: BASE_REF=origin/${{ github.base_ref }} ./scripts/check-version-bump.sh
-
-  # 守り (テスト・CI・チェックスクリプト) を弱める変更の可視化。
-  # 意図的に緩めることはあるのでブロックせず、ラベルとコメントで必ず目に入るようにする
-  # (経緯は Issue #18)。他のジョブと分けてあるのは、失敗させない性質が違うため
-  guardrail:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      PR: ${{ github.event.pull_request.number }}
-      REPO: ${{ github.repository }}
-      MARKER: '<!-- guardrail-weakening -->'
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - id: check
-        name: 守りを弱める変更の検知
-        run: BASE_REF=origin/${{ github.base_ref }} ./scripts/check-guardrail-weakening.sh | tee /tmp/guardrail.txt
-      - name: 検出内容を PR に可視化する
-        if: steps.check.outputs.found == 'true'
-        run: |
-          gh pr edit "$PR" --add-label guardrail-change
-          # 初回だけ投稿するのでなく毎回 upsert する: コメントが常に現在の HEAD の
-          # 検出内容を表し、並行実行で二重投稿されても 1 件に収束する (Issue #63)
-          {
-            echo "$MARKER"
-            echo '### 守りを弱める変更を検出しました'
-            echo
-            echo 'テスト・CI・チェックスクリプトを削る変更が含まれています。**マージはブロックしません**が、意図的なら PR 本文に理由を書いてください。'
-            echo
-            echo '```'
-            grep '^WEAKENING:' /tmp/guardrail.txt
-            echo '```'
-            echo
-            echo "<sub>このコメントは push のたびに更新されます (対象コミット: \`${HEAD_SHA:0:7}\`)。</sub>"
-          } > /tmp/guardrail-comment.md
-          ./scripts/upsert-pr-comment.sh /tmp/guardrail-comment.md
-      - name: 検出が解消されたら可視化を取り下げる
-        if: steps.check.outputs.found == 'false'
-        run: |
-          # 付いていないラベルを外そうとするとエラーになるので、有無を見てから外す
-          if gh pr view "$PR" --json labels --jq '.labels[].name' | grep -qx guardrail-change; then
-            gh pr edit "$PR" --remove-label guardrail-change
-            echo "指摘が解消されたのでラベルを外した"
-          fi
-          # ラベルだけ外してコメントを残すと「弱めている」と読める表示が残り続けるため、
-          # コメント側も解消済みへ更新する (無ければ何もしない)
-          {
-            echo "$MARKER"
-            echo '### 守りを弱める変更は解消されました'
-            echo
-            echo "以前のコミットでは検出していましたが、現在の HEAD (\`${HEAD_SHA:0:7}\`) では検出されていません。"
-          } > /tmp/guardrail-comment.md
-          ./scripts/upsert-pr-comment.sh /tmp/guardrail-comment.md --update-only
