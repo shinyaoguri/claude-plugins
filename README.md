@@ -6,18 +6,18 @@
 
 | プラグイン | 対象 | 内容 |
 |---|---|---|
-| [repo-standards](plugins/repo-standards) | 自分の全リポジトリと各マシン | 個人の開発運用標準 (同梱の repo-standards.json が正本、[ADR 0022](docs/decisions/0022-repo-standards-bundled.md)) — リポジトリ構成・GitHub 設定・マシン環境の監査と雛形生成、作業の記録 (Issue・PR へのスクショ添付・気付きの起票) の作法、`/repo-audit` `/repo-audit-min` `/repo-audit-fix` `/env-doctor` `/repo-bootstrap` `/gyazo-capture` `/report-issue` (skill 7)、push した PR の CI が赤いまま終わらせない見届けと、合意なしに実装が広がるのを止めるプランゲート (hook 5、[ADR 0016](docs/decisions/0016-agent-behavior-hooks-in-plugin.md) / [0017](docs/decisions/0017-approval-at-the-plan.md)) |
+| [repo-standards](plugins/repo-standards) | 自分の全リポジトリと各マシン | 個人の開発運用標準 (同梱の repo-standards.json が正本、[ADR 0022](docs/decisions/0022-repo-standards-bundled.md)) — リポジトリ構成・GitHub 設定・マシン環境の監査と雛形生成、作業の記録 (Issue・PR へのスクショ添付・気付きの起票) の作法、`/repo-audit` `/repo-audit-min` `/repo-audit-fix` `/env-doctor` `/repo-bootstrap` `/gyazo-capture` `/report-issue` `/next-task` (skill 8)、push した PR の CI が赤いまま終わらせない見届けと、合意なしに実装が広がるのを止めるプランゲート (hook 7、[ADR 0016](docs/decisions/0016-agent-behavior-hooks-in-plugin.md) / [0017](docs/decisions/0017-approval-at-the-plan.md)) |
 
 対象リポジトリの正典ドキュメント (CLAUDE.md ほか) と個人標準の正本を複製せず、「いつ・何を読むか」を想起させる薄いルーターとして設計している (ドリフト防止、[ADR 0001](docs/decisions/0001-thin-router.md))。
 
 ### リポジトリ監査スキルの使い分けとトークン目安
 
-個人標準 (repo-standards.json、51 項目 = 機械判定 43 + LLM 判定 8) との突き合わせは 3 スキルに分かれている。**消費トークンが 2 桁違う**ので用途で選ぶ。
+個人標準 (repo-standards.json、49 項目 = 機械判定 41 + LLM 判定 8) との突き合わせは 3 スキルに分かれている。**消費トークンが 2 桁違う**ので用途で選ぶ。
 
 | スキル | 何をするか | コスト目安 |
 |---|---|---|
-| `/repo-audit-min` | 機械判定 43 項目を圧縮して報告し、LLM 判定 8 項目は材料をスクリプトで集めてから **Haiku 1 本**に一括で任せる。求められれば判定を**暫定値**として findings に残し修正フローへ渡す (既定は保存せず、修正の提案もしない) | メイン **1K 弱** + 判定係 **1 本**。概算 **$0.05 前後** |
-| `/repo-audit` | 同じ 51 項目を、LLM 判定は項目ごとの並列サブエージェントが**材料 + 実ファイル**を読んで判定し、必須項目と指摘は**独立した反証係**が覆せるか確かめる。さらに指摘ごとに**標準に合わせることがこのリポの設計意図と衝突しないか**を判定してから findings に保存し、修正フローへ渡す | メイン **+10K 前後**、サブエージェント込みの累積 **500〜1M**。概算 **$2〜3.5** |
+| `/repo-audit-min` | 機械判定 41 項目を圧縮して報告し、LLM 判定 8 項目は材料をスクリプトで集めてから **Haiku 1 本**に一括で任せる。求められれば判定を**暫定値**として findings に残し修正フローへ渡す (既定は保存せず、修正の提案もしない) | メイン **1K 弱** + 判定係 **1 本**。概算 **$0.05 前後** |
+| `/repo-audit` | 同じ 49 項目を、LLM 判定は項目ごとの並列サブエージェントが**材料 + 実ファイル**を読んで判定し、必須項目と指摘は**独立した反証係**が覆せるか確かめる。さらに指摘ごとに**標準に合わせることがこのリポの設計意図と衝突しないか**を判定してから findings に保存し、修正フローへ渡す | メイン **+10K 前後**、サブエージェント込みの累積 **500〜1M**。概算 **$2〜3.5** |
 | `/repo-audit-fix` | findings の未決項目を承認を取りながら修正する (リポ内ファイルは 1 PR にまとめ、GitHub 設定は定義ファイル経由、破壊的操作は提示のみ) | 修正件数しだい。`/repo-audit` と同等かそれ以上 |
 
 `/repo-audit-min` が 1 桁以上安いのは、**LLM を外したからではなく LLM の使い方を変えたから**。効いているのは 3 点:

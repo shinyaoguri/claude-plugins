@@ -2,7 +2,7 @@
 
 - **状態**: 採用 (2026-08-10, Issue [#86](https://github.com/shinyaoguri/claude-plugins/issues/86) の判断。適用範囲は 2026-08-31 に [0021](0021-three-layer-placement.md) 決定 2 が狭めた — プラグインが供給するのは、リポジトリが要求しない支援に限る)
 
-- **文脈**: 「push した PR の CI が赤いままセッションを終えられない」フック (ci-watch) を [metaphor](https://github.com/shinyaoguri/metaphor) と [metaphor-cli](https://github.com/shinyaoguri/metaphor-cli) の各リポへコピーして実地投入し、機能することを確認した ([metaphor#450](https://github.com/shinyaoguri/metaphor/pull/450) / [metaphor-cli#104](https://github.com/shinyaoguri/metaphor-cli/pull/104))。これを個人標準へ採り込むにあたり、配り方が [#86](https://github.com/shinyaoguri/claude-plugins/issues/86) の論点として残った。当初の候補は (1) 各リポへコピー、(2) プロジェクトの `.claude/settings.json` から `${CLAUDE_PLUGIN_ROOT}` を参照、(3) プラグイン同梱 + `repo-bootstrap` が雛形をコピー。
+- **文脈**: 「push した PR の CI が赤いままセッションを終えられない」フック (ci-watch) を [metaphor](https://github.com/shinyaoguri/metaphor) と metaphor-cli (非公開リポジトリ) の各リポへコピーして実地投入し、機能することを確認した ([metaphor#450](https://github.com/shinyaoguri/metaphor/pull/450) / metaphor-cli#104)。これを個人標準へ採り込むにあたり、配り方が [#86](https://github.com/shinyaoguri/claude-plugins/issues/86) の論点として残った。当初の候補は (1) 各リポへコピー、(2) プロジェクトの `.claude/settings.json` から `${CLAUDE_PLUGIN_ROOT}` を参照、(3) プラグイン同梱 + `repo-bootstrap` が雛形をコピー。
 
   検討で分かったこと:
 
@@ -25,4 +25,4 @@
 
   既知の限界: Claude Code のセッションが動いている間だけ有効で、無人時間に bot PR が赤くなっても拾えない。印は `git push` を含む Bash 実行で置かれるため、GitHub UI から直接コミットした場合などは対象外。
 
-  metaphor / metaphor-cli に入れた既存のコピーは二重に発火するので、各リポ側で削除する ([metaphor#452](https://github.com/shinyaoguri/metaphor/issues/452) / [metaphor-cli#106](https://github.com/shinyaoguri/metaphor-cli/issues/106))。
+  metaphor / metaphor-cli に入れた既存のコピーは二重に発火するので、各リポ側で削除する ([metaphor#452](https://github.com/shinyaoguri/metaphor/issues/452) / metaphor-cli#106)。
