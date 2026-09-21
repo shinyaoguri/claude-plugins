@@ -1,10 +1,10 @@
 # claude-plugins 開発規約
 
-個人用 plugin marketplace。構成とプラグイン追加手順は [README.md](README.md) が正本。設計判断の経緯は [docs/decisions/](docs/decisions/) の ADR にある。
+個人用 plugin marketplace。構成とプラグイン追加手順は [README.md](README.md) が正本。設計判断の経緯は [docs/decisions/](docs/decisions/) の ADR にある ([索引](docs/decisions/README.md#索引) の「現行」2 群から読む)。
 
 ## 設計原則
 
-- プラグインは上流正典ドキュメントへの**薄いルーター**。正典の内容を複製しない (ADR [0001](docs/decisions/0001-thin-router.md))
+- 上流に正典があるものは内容を複製せず、場所と読み方だけを書く (ADR [0001](docs/decisions/0001-thin-router.md))。判定ロジックを同梱するなら、正本との契約を同じリポジトリで e2e テストして守る (ADR [0022](docs/decisions/0022-repo-standards-bundled.md)) — repo-standards は後者で、薄いルーターではない
 - プラグイン本文に上流リポのパス・ファイル参照を書き足したら [upstream-refs.json](upstream-refs.json) にも追記する (週次 freshness が上流での実在を検査する。追記漏れを PR CI では検出しない — ADR [0028](docs/decisions/0028-detection-needs-closure.md))
 - 公式が非推奨とする構成は使わない (ADR [0004](docs/decisions/0004-deprecation-guard.md)、`scripts/check-deprecated-patterns.sh` が CI で強制)。スラッシュコマンドも `commands/` でなく `skills/<name>/SKILL.md` として作る
 - 汎用スキルは `~/.claude/skills/` でなく **plugin として配る** (ADR [0020](docs/decisions/0020-skills-ship-as-plugins.md))。hooks・agents・scripts を同じ単位に束ねられ、enable/disable と version で伝搬を制御できるのはプラグインだけ
