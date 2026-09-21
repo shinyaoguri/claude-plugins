@@ -19,7 +19,6 @@
 - プラグイン同梱スクリプトの判定ロジックは `scripts/test-rs-*.sh` (対象スクリプトごとに 1 本) でテストする。一時 git リポと最小 manifest を組み立て、出力 (JSON Lines) の status を検証するエンドツーエンド方式 (正本との出力契約ごと守るため、関数を source しない)。同梱フック (`hooks/scripts/`) も同じ流儀で、検証対象は Claude Code との契約である**終了コードと、フックが返す判定** (Stop 系は stderr、PreToolUse は stdout の `permissionDecision`) になる (`gh` はスタブに差し替え、GitHub にも Claude セッションにも触らない)
 - エージェントの振る舞いを縛るフックは各リポにコミットせず、`repo-standards` プラグインが `hooks/hooks.json` で供給する (ADR [0016](docs/decisions/0016-agent-behavior-hooks-in-plugin.md))。個人標準 (`repo-standards.json`) には項目を足さない
 - **人間の承認はプラン 1 点へ集約し、その 1 点も合意済みなら待たない** (ADR [0017](docs/decisions/0017-approval-at-the-plan.md) と 2026-09-07 の改訂)。可逆な操作に確認を挟まない代わりに、合意なしの実装拡大は `plan-gate` フックが deny で止める。**トリアージ印の付いた open な Issue に紐づくプランは `plan-pass` フックが `allow` を返して承認プロンプトを消す** — 消すのは待つことだけで、プランを書くことも記録することも変えない。`plan-pass` は `deny` を返さず、判定できないものはすべて素通しで人へ返る (逃げ道は `RS_PLAN_PASS=0`)。分類器の設定 (`autoMode.*`) は仕様上プラグインから供給できないので、プラグインは **`env-doctor` で診断するだけ**にとどめ、実体は setup リポの `claude/settings.json` に置く
-- `scripts/check-guardrail-weakening.sh` (テスト: `scripts/test-guardrail-weakening.sh`) だけは**ゲートでなくレポート**で、検出しても exit 0 を保つ。守りを緩める変更は正当な場合があるので止めず、ラベルとコメントで可視化する (ADR [0007](docs/decisions/0007-guardrail-visibility.md))
 
 ## バージョン規約 (ADR [0003](docs/decisions/0003-version-policy.md))
 
@@ -39,7 +38,6 @@
 | 層 | 実行 | 正本 |
 |---|---|---|
 | PR CI | validate + 整合性 + 非推奨パターン + version bump + マニフェスト網羅 + スクリプトの判定テスト | [.github/workflows/ci.yml](.github/workflows/ci.yml) |
-| PR CI (非ブロック) | 守りを弱める変更の可視化 (`guardrail-change` ラベル + コメント) | ci.yml の guardrail ジョブ (ADR [0007](docs/decisions/0007-guardrail-visibility.md)) |
 | 週次 | 上流参照の実在 + setup の意図の台帳との突き合わせ (フック・スキルが台帳に載っているか。ADR [0027](docs/decisions/0027-intents-ledger-cross-repo-coverage.md)) + リンク切れ → Issue 起票 | [.github/workflows/freshness.yml](.github/workflows/freshness.yml) |
 | 週次 | GitHub Actions の更新 (patch/minor は CI green で自動マージ、major は `manual-review` ラベル) | [.github/workflows/dependabot-auto-merge.yml](.github/workflows/dependabot-auto-merge.yml) (ADR [0005](docs/decisions/0005-dependabot-auto-merge.md)) |
 | 月次 | 利用状況・意味的ドリフト・仕組み自体の俯瞰レビュー | [.claude/skills/portfolio-review/](.claude/skills/portfolio-review/SKILL.md) |

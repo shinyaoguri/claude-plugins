@@ -1,6 +1,6 @@
 # 0007: AI の暴走対策は権限剥奪でなく「守りを弱める変更の可視化」に置く
 
-- **状態**: 採用 (2026-08-04)
+- **状態**: 一部廃止 (2026-09-22。可視化レポートの決定 → [0028](0028-detection-needs-closure.md)。権限側の決定 — `Administration` の剥奪と bypass list を空にすることだけ行い、`Workflows` の剥奪・deny リストの拡張・Organization 化は採らない — は現行)
 - **文脈**: repo-standards プラグインは Claude 自身と同じ `gh` トークン・同じ Bash 権限で動くため、Claude がブランチ保護を外して監査をバイパスできてしまう。守る側と守られる側が同一の権限主体である限り、どんなルールも自己適用でしかない。そこで「Claude 用トークンから権限を剥奪する」方向 (fine-grained PAT で `Administration` / `Workflows` を No access にする、Organization + machine user で権限を非対称にする) を検討したが、費用対効果の評価で**的を外していると判断した**。
   - 実際に起きやすい失敗モードは GitHub 設定の書き換えではなく、**目的をショートカットする改変**である: CI のステップをコメントアウトする / アサーションを緩める / テストを消す / `continue-on-error`・`skip`・`|| true` を足す / 検証を飛ばして完了報告する。これらはすべて Contents 権限の範囲内で、`Administration` を剥奪しても 1 つも防げない。しかも発生確率はブランチ保護を外す行為よりずっと高い
   - 権限剥奪には実コストがある。特に `Workflows: No access` は `.github/workflows/` を含む push を拒否するため CI の改善そのものができなくなる (実例: [#17](https://github.com/shinyaoguri/claude-plugins/pull/17) は ci.yml にテストステップを追加しており、この制限下では push できなかった)。deny リストの拡張も誤爆すれば permission prompt を増やし、それ自体が「無駄な手順」になる
