@@ -19,12 +19,14 @@ description: "claude-plugins marketplace の月次俯瞰レビュー。Claude �
 
 - ローカルのセッション履歴 (`~/.claude/projects/` 配下の各プロジェクト) をディレクトリの更新時刻で概観し、直近 1 ヶ月にどのプロジェクトでどんな作業をしたかを把握する。`/insights` が使える環境なら併用する
 - 探すもの: **複数セッションで繰り返している手作業・定型プロンプト・毎回思い出させている知識**。それがスキル/プラグイン化の候補
+- **手段がまだ無い候補は、setup の意図の台帳 (`claude/intents.json`) へ `means` が空の意図として入れる** (ADR [0027](../../../docs/decisions/0027-intents-ledger-cross-repo-coverage.md))。本体の新機能で満たせるようになったかを、setup 側の次の見直しが判定する
 - 候補の置き場は配置方針に従う: 複数プロジェクト横断 → marketplace の新プラグイン / 特定リポ固有 → そのリポの `.claude/skills/` (marketplace に入れない)
 
 ### 2. 既存プラグインの有効性 (統廃合候補の抽出)
 
 - 各プラグイン (marketplace.json の一覧) について、直近 1 ヶ月で実際に発火・参照された形跡があるかをセッション履歴から確認する
 - 使われていない・記述が実作業とずれている・2 つのスキルが常に同時に読まれている、などがあれば統合・廃止・降格の候補にする
+- 統廃合の理由が「本体機能による置換」なら、台帳のその意図の `sunset` を物差しにする (本体の changelog との突き合わせは setup の `claude-upstream-review` の仕事で、ここではやらない)
 - **分割・統合の判断基準は ADR [0009](../../../docs/decisions/0009-plugin-granularity.md)** (粒度は enable/disable と version の単位で決める)。description の凝集度・検索性・スキル起動精度は分離の理由にならないので、それだけを根拠にした分割案は出さない
 
 ### 3. 意味的ドリフトの点検

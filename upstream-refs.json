@@ -5,6 +5,7 @@
   "shinyaoguri/setup": [
     "claude/CLAUDE.md",
     "claude/settings.json",
+    "claude/intents.json",
     "tasks/claude.yml",
     "tasks/git.yml",
     "playbook_sillicon_mac.yml"
