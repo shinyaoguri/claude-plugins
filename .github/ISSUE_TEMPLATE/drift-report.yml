@@ -6,7 +6,7 @@ body:
     id: source
     attributes:
       label: 検知元
-      description: freshness CI / portfolio-review / 手動作業中 など
+      description: freshness CI / 利用実績の再測定 / 手動作業中 など
     validations:
       required: true
   - type: textarea
