@@ -29,6 +29,7 @@
 
 | ADR | 決めたこと |
 |---|---|
+| [0030](0030-simplify-the-audit.md) | 監査と掃除の段を、守る価値のあるものだけに絞る (反証は required かつ ok だけ / min は報告専用 / [gone] の掃除は gone-clean へ) |
 | [0022](0022-repo-standards-bundled.md) | 判定基準の正本 (repo-standards.json) はプラグインに同梱する |
 | [0023](0023-drop-kinds-abstraction.md) | リポ種別による項目の出し分けを畳む |
 | [0024](0024-level-semantics.md) | level は required / recommended の 2 値 |
