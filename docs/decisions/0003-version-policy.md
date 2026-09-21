@@ -1,6 +1,6 @@
 # 0003: version は plugin.json を唯一の正とし、bump は PR 内で行い CI が期待増分を強制する
 
-- **状態**: 採用 (2026-08-02)
+- **状態**: 一部廃止 (2026-09-22。期待増分の導出と完全一致の強制 — PR タイトルの type 限定と `release:*` ラベル — → [0028](0028-detection-needs-closure.md)。version の正を plugin.json だけに置くこと、変更と同じ PR で bump することは現行)
 - **文脈**: 公式ドキュメントの調査で 2 つの事実が判明した。(1) クライアントの更新判定は version 比較で行われ、**bump しないマージは他マシンへ伝搬しない**。(2) plugin.json と marketplace.json の両方に version を書くのは公式非推奨 (plugin.json が無警告で優先される)。また、マージ後に bot が bump コミットを積む方式は、ブランチ保護 (PR 必須) と「GITHUB_TOKEN 起点の push では CI が発火しない」制約 (metaphor の syphon-bump PR で既知) に衝突し、PAT/App の管理が必要になる。
 - **決定**:
   - version は plugin.json のみに置き、marketplace.json のエントリからは削除する (check-consistency.sh が再発を検査)
