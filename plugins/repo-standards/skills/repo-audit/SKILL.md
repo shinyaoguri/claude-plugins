@@ -1,6 +1,6 @@
 ---
 name: repo-audit
-description: "cwd のリポジトリを個人標準 (repo-standards.json) と突き合わせて精度優先で監査する。GitHub 設定・リポ構成ファイル・.claude 設定の 3 層を機械判定 + LLM 判定でレポートし、必須項目と指摘は独立した判定者の反証を通し、さらに標準に合わせることがリポ自身の設計意図と衝突しないかを判定してから findings に保存して修正シーケンス (repo-audit-fix) へ引き渡す。Use when auditing a repository against personal standards, checking GitHub repo settings, or reviewing repository structure and Claude configuration."
+description: "cwd のリポジトリを個人標準 (repo-standards.json) と突き合わせて精度優先で監査する。GitHub 設定・リポ構成ファイル・.claude 設定の 3 層を機械判定 + LLM 判定でレポートし、必須項目の「適合」判定は独立した判定者の反証を通し、さらに標準に合わせることがリポ自身の設計意図と衝突しないかを判定してから findings に保存して修正シーケンス (repo-audit-fix) へ引き渡す。Use when auditing a repository against personal standards, checking GitHub repo settings, or reviewing repository structure and Claude configuration."
 allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-repo.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-github.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-evidence.sh:*)"
 ---
 
@@ -35,14 +35,14 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
    bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh set --verdict <ok|warn|ng|skip> --evidence "<返ってきた EVIDENCE>" <id>
    ```
 
-3. **反証** — 対象は `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh list --needs-verify` (required 項目と、ng / warn と判定した項目)。項目ごとに**並列で standards-verifier サブエージェントへ委譲**する (`subagent_type: "repo-standards:standards-verifier"`)。渡すのは判定観点・材料・**元の verdict と根拠**。判定係とは別のコンテキストで走らせること — 同じエージェントに確認させても自分の結論を追認するだけになる
+3. **反証** — 対象は `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh list --needs-verify` (**required の項目のうち ok / skip と判定したもの**。ng / warn は fix の承認一覧と PR で人が見るので反証にかけない — 反証が守るのは、誰にも見られないまま記録に残る誤判定。ADR 0030)。項目ごとに**並列で standards-verifier サブエージェントへ委譲**する (`subagent_type: "repo-standards:standards-verifier"`)。渡すのは判定観点・材料・**元の verdict と根拠**。判定係とは別のコンテキストで走らせること — 同じエージェントに確認させても自分の結論を追認するだけになる
 
    | 返り値 | 書き戻し |
    |---|---|
    | `RESULT: upheld` | `set --verified --evidence "<反証の EVIDENCE>" <id>` |
    | `RESULT: overturned` | `set --verdict <新しい VERDICT> --evidence "<反証の EVIDENCE>" <id>` |
 
-   overturned で書き戻すと `verified` が落ちるので、その項目は再び反証待ちに戻る。**同じ項目が 2 回覆ったら 3 回目を回さず**、両方の判定と根拠を併記してユーザーに判断を仰ぐ (判定が振動しているのは観点かリポの状態が曖昧なサインで、回し続けても収束しない)
+   overturned で ng / warn に覆った項目は反証の対象から外れ、指摘として手順 4 以降へ進む (覆った判定をもう一度反証にかけて往復させない)
 
 4. **衝突判定** — 対象は `bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh list --needs-intent-check` (標準から外れている項目のうち、まだ意図と突き合わせていないもの)。**機械判定の ng / warn もここに含まれる** — この標準は全リポ共通のルールであって個別のリポで最適とは限らず、機械判定に文脈が入る接点はここしかない
 

@@ -87,6 +87,19 @@ findings_dir() {
 
 head_now() { git rev-parse --short HEAD 2>/dev/null || echo ""; }
 
+# 反証待ちの定義 (list --needs-verify と summary が共有する jq の def)。
+# 反証が守るのは「誰にも見られないまま監査記録に残る誤判定」。ng / warn と判定した項目は fix の
+# 承認一覧と PR に出て人が見るので、対象は required のうち ok / skip と判定されたものだけ
+# (ADR 0030)。陳腐化した判定は --needs-verdict が再判定へ引き戻すのでここでは拾わない。
+# min の暫定判定も同様 (反証にかける前に本監査の判定へ置き換わる)
+# shellcheck disable=SC2016
+needs_verify_def='def needs_verify($head):
+  .status == "manual" and ((.verdict // "") != "") and (.head == $head)
+  and ((.verdict_source // "full") == "full")
+  and ((.verified // false) | not)
+  and .level == "required" and (.verdict == "ok" or .verdict == "skip");
+'
+
 # findings が無い / 空のときに読んでも落ちないよう空配列を返す。
 # jq -s は不在ファイルに対し stdout へ [] を出しつつ非 0 で終わるので、
 # `|| echo '[]'` 形式にすると出力が二重になり --argjson が壊れる
@@ -175,7 +188,7 @@ cmd_list() {
   # `.` がパイプ左の配列を指してしまい "Cannot index array with string" で落ちる
   jq -c --arg s "$status" --arg d "$decision" --arg l "$layer" --arg lv "$level" \
         --arg it "$intent" --arg head "$(head_now)" \
-        --argjson needs "$needs" --argjson verify "$verify" --argjson intentchk "$intentchk" '
+        --argjson needs "$needs" --argjson verify "$verify" --argjson intentchk "$intentchk" "$needs_verify_def"'
     . as $r
     | (if $r.status == "manual" and ($r.verdict // "") != "" then $r.verdict else $r.status end) as $eff
     | select($s == "" or (($s | split(",")) | index($eff)))
@@ -186,15 +199,7 @@ cmd_list() {
     # 判定し直す。安い層の判定を本監査の結論として残さないための引き戻し)
     | select($needs == 0 or ($r.status == "manual"
         and (($r.verdict | not) or ($r.head != $head) or (($r.verdict_source // "full") == "min"))))
-    # 反証待ち: 判定が付いていて陳腐化しておらず、まだ反証を通っていないもののうち、
-    # 誤判定の代償が大きいもの (required の項目、および ng / warn と判定したもの)。
-    # 陳腐化した判定は --needs-verdict 側が再判定に引き戻すのでここでは拾わない。
-    # min の暫定判定も同様 (反証にかける前に本監査の判定へ置き換わる)
-    | select($verify == 0 or (
-        $r.status == "manual" and ($r.verdict // "") != "" and ($r.head == $head)
-        and (($r.verdict_source // "full") == "full")
-        and (($r.verified // false) | not)
-        and ($r.level == "required" or $eff == "ng" or $eff == "warn")))
+    | select($verify == 0 or ($r | needs_verify($head)))
     | select($it == "" or (($it | split(",")) | index($r.intent // "")))
     # 衝突判定待ち: 標準から外れている項目のうち、まだ意図と突き合わせていないもの。
     # 機械判定の ng / warn も対象に含む — LLM が文脈を持ち込める唯一の接点なので。
@@ -358,19 +363,14 @@ cmd_summary() {
   [ -s "$file" ] || { jq -cn '{id:"_next",hint:"findings が空 (先に監査を実行する)"}'; return; }
   # 判定済みの manual 行は verdict を実効 status として数える
   # (判定して ng と分かった項目が集計から抜け落ちると、未対応の必須違反を見落とす)
-  jq -sc --arg head "$(head_now)" '
+  jq -sc --arg head "$(head_now)" "$needs_verify_def"'
     map(. + {_eff: (if .status == "manual" and (.verdict // "") != "" then .verdict else .status end)})
     # 未判定・陳腐化。min の暫定判定はここに数えない — 判定自体はあり、修正フローへは
     # 進めるため ($provisional として別に数え、本監査の再判定対象には --needs-verdict で残す)
     | (map(select(.status == "manual" and ((.verdict | not) or (.head != $head)))) | length) as $mp
     | (map(select(.decision == "pending")) | length) as $pending
-    # 反証待ち。判定はあるが独立した検証を通っていない required / ng / warn
-    # (min の暫定判定は本監査で判定し直されるので $mp 側に数える)
-    | (map(select(.status == "manual" and ((.verdict // "") != "") and (.head == $head)
-                  and ((.verdict_source // "full") == "full")
-                  and ((.verified // false) | not)
-                  and (.level == "required" or ._eff == "ng" or ._eff == "warn")))
-       | length) as $unverified
+    # 反証待ち (list --needs-verify と同じ定義を使う。2 か所に書くとずれる)
+    | (map(select(needs_verify($head))) | length) as $unverified
     # 安い層の暫定判定。本監査を通せば full の判定に置き換わる
     | (map(select((.verdict // "") != "" and ((.verdict_source // "full") == "min")))
        | length) as $provisional

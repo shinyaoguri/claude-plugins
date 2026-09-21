@@ -311,8 +311,25 @@ check "a " "$got" "required は ok でも反証待ちに入る (見落としの�
 d=$(newrepo)
 got=$( cd "$d" && line a manual | bash "$target" save >/dev/null
        bash "$target" set --verdict ng --evidence "$EV" a >/dev/null
-       bash "$target" list --needs-verify | jq -r .id )
-check "a" "$got" "recommended でも ng / warn と判定したら反証待ちに入る"
+       bash "$target" list --needs-verify | wc -l | tr -d ' ' )
+check "0" "$got" "recommended の ng / warn は反証待ちに入らない (fix の承認一覧と PR で人が見る)"
+
+# 反証が守るのは「誰にも見られないまま監査記録に残る誤判定」。required でも ng / warn に
+# なった項目は人の目に入るので対象外 (ADR 0030)。ok と skip は人の目に入らない側
+d=$(newrepo)
+got=$( cd "$d" && { line a manual required; line b manual required; line c manual required; } | bash "$target" save >/dev/null
+       bash "$target" set --verdict ng --evidence "$EV" a >/dev/null
+       bash "$target" set --verdict warn --evidence "$EV" b >/dev/null
+       bash "$target" set --verdict skip --evidence "$EV" c >/dev/null
+       bash "$target" list --needs-verify | jq -r .id | tr '\n' ' ' )
+check "c " "$got" "required でも ng / warn は反証待ちに入らず、skip は入る"
+
+d=$(newrepo)
+got=$( cd "$d" && { line a manual required; line b manual required; } | bash "$target" save >/dev/null
+       bash "$target" set --verdict ng --evidence "$EV" a >/dev/null
+       bash "$target" set --verdict ok --evidence "$EV" b >/dev/null
+       bash "$target" summary | jq -r .unverified )
+check "1" "$got" "summary の反証待ちも list と同じ範囲を数える"
 
 d=$(newrepo)
 got=$( cd "$d" && line a manual required | bash "$target" save >/dev/null
