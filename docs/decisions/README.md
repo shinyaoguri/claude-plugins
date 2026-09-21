@@ -23,6 +23,7 @@
 | [0021](0021-three-layer-placement.md) | グローバル / plugin / リポジトリ — 置き場は「どこで発火する必要があるか」で決める |
 | [0027](0027-intents-ledger-cross-repo-coverage.md) | 手段の存在理由は setup の意図の台帳に持ち、突き合わせは週次で見る |
 | [0028](0028-detection-needs-closure.md) | 検知の層は「閉じる輪」を持つものだけを置く |
+| [0029](0029-measure-what-the-standard-installs.md) | 標準の有用性は「設置させたものが使われているか」で測り、180 日の期限で再測定を強制する |
 
 ### repo-standards プラグインの設計記録 (現行)
 

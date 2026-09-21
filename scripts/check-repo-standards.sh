@@ -141,10 +141,13 @@ assert_empty "全項目に evidence があり kind が enum に収まる" \
       then "\($i.id): 未知の evidence.kind \($i.evidence.kind // "(無し)")"
       else empty end)'
 
-assert_empty "observation は measured_at と method を持つ" \
+# observation は「測った」という宣言だけでは足りない。何が測れたか (result) を残さないと、
+# 再測定のときに前回から良くなったのか悪くなったのかを比べられない (ADR 0029)
+assert_empty "observation は measured_at と method と result を持つ" \
   "$common_defs"'.items[] | . as $i | select($i.evidence.kind == "observation")
    | (if ($i.evidence.measured_at | isodate | not) then "\($i.id): measured_at が YYYY-MM-DD でない" else empty end),
-     (if (($i.evidence.method // "") | blank) then "\($i.id): method (再測定の手順) が無い" else empty end)'
+     (if (($i.evidence.method // "") | blank) then "\($i.id): method (再測定の手順) が無い" else empty end),
+     (if (($i.evidence.result // "") | blank) then "\($i.id): result (測れた事実) が無い" else empty end)'
 
 assert_empty "spec は source と checked_at を持つ" \
   "$common_defs"'.items[] | . as $i | select($i.evidence.kind == "spec")

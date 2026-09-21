@@ -86,7 +86,12 @@
       "level": "required",
       "check": { "type": "builtin", "name": "adr_exists" },
       "why": "設計判断の記録 (メモリリセット耐性の中核)。なぜその形なのかはコードにも履歴にも残らないので、書かなければ次に触る人が同じ検討をやり直す。置き場は docs/decisions/ でも docs/adr/ でもよい。ディレクトリだけ作って空のまま放置されると記録の実体が無い",
-      "evidence": { "kind": "principle" },
+      "evidence": {
+        "kind": "observation",
+        "measured_at": "2026-09-22",
+        "method": "scripts/measure-standards-usage.sh adr-exists (対象: 直近 90 日に push のある自分のリポ。ADR 0029)",
+        "result": "設置 21 リポの全部で、直近 90 日に ADR が追加・更新されている"
+      },
       "cadence": "bootstrap",
       "fix": "docs/decisions/ (既に docs/adr/ を使っているならそちら) を作り、状態 / 文脈 / 決定 / 影響の 4 節で ADR を書き始める",
       "fix_kind": "generative"
@@ -111,7 +116,12 @@
       "level": "recommended",
       "check": { "type": "builtin", "name": "changelog_exists" },
       "why": "リリースするリポでは変更履歴が利用者への契約になる (タグが無いリポは対象外)",
-      "evidence": { "kind": "principle" },
+      "evidence": {
+        "kind": "observation",
+        "measured_at": "2026-09-22",
+        "method": "scripts/measure-standards-usage.sh changelog-exists (対象: 直近 90 日に push のある自分のリポ。ADR 0029)",
+        "result": "CHANGELOG とリリースの両方がある 4 リポ中、直近のリリースに追随しているのは 2 リポ"
+      },
       "cadence": "bootstrap",
       "fix": "CHANGELOG.md を追加する (リリース workflow から自動生成してもよい)",
       "fix_kind": "deterministic"
@@ -155,7 +165,12 @@
       "level": "recommended",
       "check": { "type": "builtin", "name": "scheduled_workflow_exists" },
       "why": "参照先・依存・リンクのドリフトは PR CI では捉えられず、定期実行でしか拾えない",
-      "evidence": { "kind": "principle" },
+      "evidence": {
+        "kind": "observation",
+        "measured_at": "2026-09-22",
+        "method": "scripts/measure-standards-usage.sh scheduled-freshness (対象: 直近 90 日に push のある自分のリポ。ADR 0029)",
+        "result": "schedule の run がある 16 リポ中 13 リポは直近が success。3 リポは赤のまま"
+      },
       "cadence": "bootstrap",
       "fix": "schedule トリガの workflow を追加し、検知結果を Issue に起票する (claude-plugins の freshness.yml が手本)",
       "fix_kind": "generative"
@@ -188,7 +203,12 @@
       "level": "recommended",
       "check": { "type": "file_exists", "path": ".github/dependabot.yml" },
       "why": "依存とワークフローの陳腐化防止。更新は気付いたときにやると溜まって一度に大きくなり、セキュリティ更新が紛れて見落とされる",
-      "evidence": { "kind": "principle" },
+      "evidence": {
+        "kind": "observation",
+        "measured_at": "2026-09-22",
+        "method": "scripts/measure-standards-usage.sh dependabot-config (対象: 直近 90 日に push のある自分のリポ。ADR 0029)",
+        "result": "設置 25 リポ中 20 リポで Dependabot の PR がマージされている。残り 5 リポは PR が 1 件も立っていない"
+      },
       "cadence": "bootstrap",
       "fix": "エコシステムに応じた .github/dependabot.yml を追加する (cooldown 7 日: claude-plugins ADR 0005 参照)",
       "fix_kind": "deterministic"
@@ -199,7 +219,12 @@
       "level": "recommended",
       "check": { "type": "glob_exists", "path": ".github/ISSUE_TEMPLATE/*" },
       "why": "気付き・改善案を作業を止めず Issue へ残す文化の受け皿",
-      "evidence": { "kind": "principle" },
+      "evidence": {
+        "kind": "observation",
+        "measured_at": "2026-09-22",
+        "method": "scripts/measure-standards-usage.sh issue-template-exists (対象: 直近 90 日に push のある自分のリポ。ADR 0029)",
+        "result": "設置 21 リポ中、Issue の 1/3 以上がテンプレートの見出しに沿うのは 8 リポ。gh issue create はテンプレートを通らないので、残り 13 リポでは Issue の構成を決めているのがテンプレートではない"
+      },
       "cadence": "bootstrap",
       "fix": "改善提案などの最小テンプレートを .github/ISSUE_TEMPLATE/ に追加する",
       "fix_kind": "deterministic"
@@ -210,7 +235,12 @@
       "level": "recommended",
       "check": { "type": "builtin", "name": "pr_template_exists" },
       "why": "PR 本文 (目的・変更点・確認方法) を丁寧に書く規約の受け皿",
-      "evidence": { "kind": "principle" },
+      "evidence": {
+        "kind": "observation",
+        "measured_at": "2026-09-22",
+        "method": "scripts/measure-standards-usage.sh pr-template-exists (対象: 直近 90 日に push のある自分のリポ。ADR 0029)",
+        "result": "設置 22 リポ中 19 リポで、人の PR のほぼ全部がテンプレートの見出しに沿う。残り 3 リポは実際の PR の見出しがテンプレートと一致しない"
+      },
       "cadence": "bootstrap",
       "fix": ".github/pull_request_template.md を追加する",
       "fix_kind": "deterministic"
@@ -238,7 +268,12 @@
         "prompt": "見た目の変更に視覚的な証跡が残っているかを判定する。まず (0) このリポが画面・描画・生成画像を持つか (GUI アプリ・web フロントエンド・描画ライブラリ・可視化・テーマ) を見て、持たないなら skip とする。持つなら (1) 直近 10 件のマージ済み PR (gh pr list --state merged --limit 10 --json number,title,body) のうち見た目が変わるものに、本文かコメントで画像が示されているか (静止画。動きが変わるならアニメーション WebP も)、(2) 証跡を機械で強制する仕組みがあるか — 見た目に効くパスを触った PR に画像が無ければ落とす CI ジョブか、E2E で撮って Gyazo へ上げ PR へ貼るジョブのどちらか、を見る。画像がリポジトリへコミットされず外部 URL で貼られていることも確かめる (既にコミット済みの生成物を raw URL で参照するのは可)"
       },
       "why": "squash merge ではブランチが消え PR 本文が唯一の記録として残る。見た目の変化は diff から想像できず、マージ後に証跡を足すこともできない (metaphor #631 / #843 で確立した形)",
-      "evidence": { "kind": "principle" },
+      "evidence": {
+        "kind": "observation",
+        "measured_at": "2026-09-22",
+        "method": "scripts/measure-standards-usage.sh pr-visual-evidence (対象: 直近 90 日に push のある自分のリポ。ADR 0029)",
+        "result": "人の PR がある 35 リポ中 12 リポで Gyazo の証跡が貼られている。GUI を伴わないリポでは 0 が正常なので、母数は粗い"
+      },
       "cadence": "drift",
       "fix": "見た目が変わる PR に before/after を貼る運用を CLAUDE.md へ書き、見た目に効くパスを触った PR を CI で検査する。判定の骨子と撮影・貼り方は gyazo-capture スキル (対象パスは実績で決める / 逃げ道は no-visual-change ラベル / 必須ジョブの中に置く)",
       "fix_kind": "generative"
