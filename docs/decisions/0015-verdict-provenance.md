@@ -1,6 +1,6 @@
 # 0015: 判定の出自を findings の行に持たせ、上書き規則で階層と食い違いを守る
 
-- **状態**: 採用 (2026-08-10, Issue [#62](https://github.com/shinyaoguri/claude-plugins/issues/62) と [#74](https://github.com/shinyaoguri/claude-plugins/issues/74) の 2 の判断)
+- **状態**: 一部廃止 (2026-09-22。決定 1〜4 — 判定の出自 `verdict_source`・min から full への上書き保護・`--save` — → [0030](0030-simplify-the-audit.md) 決定 3。決定 5・6 — 機械判定を LLM 判定が覆したときの記録 — は現行)。採用は 2026-08-10 (Issue [#62](https://github.com/shinyaoguri/claude-plugins/issues/62) と [#74](https://github.com/shinyaoguri/claude-plugins/issues/74) の 2 の判断))
 - **文脈**: [0011](0011-audit-cost-tiers.md) で監査をコストで階層に分け、[0013](0013-standard-vs-repo-intent.md) で標準の指摘とリポの設計意図を突き合わせる層を入れた。運用してみると、`findings.jsonl` の行が**判定を 1 つの `verdict` フィールドでしか表せない**ことが 2 つの形で表面化した。
 
   - **安い層の判定を保存できない** ([#62](https://github.com/shinyaoguri/claude-plugins/issues/62))。`repo-audit-min` の判定 (畳んだ材料 + Haiku + ファイル 3 件まで) と本監査の判定 (項目ごとの並列サブエージェント + 実ファイル読み + 反証) が同じフィールドに同居すると、前者が後者を無警告で置き換えうる。結果として簡易監査は triage 専用に留まり、**NG を見つけても修正へ直行できない** — 「安いから起動する」効果が修正側で目減りしていた

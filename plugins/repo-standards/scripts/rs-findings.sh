@@ -7,7 +7,7 @@
 #                            [--level required] [--needs-verdict] [--needs-verify]
 #                            [--needs-intent-check] [--intent conflicts]
 #   bash rs-findings.sh set --decision approved <id>...
-#   bash rs-findings.sh set --verdict warn --evidence "..." [--source min|full] <id>
+#   bash rs-findings.sh set --verdict warn --evidence "..." <id>
 #   bash rs-findings.sh set --verified --evidence "反証の結果..." <id>
 #   bash rs-findings.sh set --intent conflicts --intent-note "衝突の理由..." <id>
 #   bash rs-findings.sh summary
@@ -20,9 +20,6 @@
 # 行スキーマ = rs-audit-*.sh の出力 (rs-lib.sh 冒頭) に以下を足したもの:
 #   verdict   LLM 判定 (ok / warn / ng / skip)。manual 項目の判定に加え、機械判定の
 #             ng / warn を偽陽性として覆すのにも使う (下記)
-#   verdict_source  その判定を下した層。full (本監査: 項目ごとの判定 + 実ファイル読み)
-#             / min (簡易監査: 畳んだ材料で安いモデルが一括判定した暫定値)。
-#             省略された古い行は full とみなす
 #   evidence  その判定の根拠。verdict を書くときは必須 (下記)
 #   head      verdict を付けたときの HEAD。現在の HEAD と違えば判定は陳腐化したとみなす
 #   verified  独立した判定者による反証を通ったか。verdict を書き換えると落ちる
@@ -54,10 +51,6 @@
 #     status が示す事実は消えない。なぜ直さないのか (decision / note / intent) を
 #     残せないと、機械判定と LLM 判定が食い違ったケース (監査が一番価値を出す場面)
 #     だけ記録が揮発する
-#   - **min の verdict は full の verdict を上書きしない**。安い層 (畳んだ材料 +
-#     安いモデル + ファイル 3 件まで) の暫定判定が、本監査の判定を無警告で
-#     置き換えるのを防ぐ。陳腐化した full (HEAD が進んだもの) は上書きしてよい。
-#     min の verdict は常に再判定の対象 (--needs-verdict) に残り、反証待ちには数えない
 #   - **verdict を書き換えると verified は落ちる**。反証済みの判定が、再判定後も
 #     反証済みに見えるのを防ぐ
 #   - **未知の id を含む set は非 0 で拒否し、1 件も書き込まない**。警告だけで成功を
@@ -90,12 +83,10 @@ head_now() { git rev-parse --short HEAD 2>/dev/null || echo ""; }
 # 反証待ちの定義 (list --needs-verify と summary が共有する jq の def)。
 # 反証が守るのは「誰にも見られないまま監査記録に残る誤判定」。ng / warn と判定した項目は fix の
 # 承認一覧と PR に出て人が見るので、対象は required のうち ok / skip と判定されたものだけ
-# (ADR 0030)。陳腐化した判定は --needs-verdict が再判定へ引き戻すのでここでは拾わない。
-# min の暫定判定も同様 (反証にかける前に本監査の判定へ置き換わる)
+# (ADR 0030)。陳腐化した判定は --needs-verdict が再判定へ引き戻すのでここでは拾わない
 # shellcheck disable=SC2016
 needs_verify_def='def needs_verify($head):
   .status == "manual" and ((.verdict // "") != "") and (.head == $head)
-  and ((.verdict_source // "full") == "full")
   and ((.verified // false) | not)
   and .level == "required" and (.verdict == "ok" or .verdict == "skip");
 '
@@ -141,7 +132,7 @@ cmd_save() {
     | (($prev | map(select(.id == $new.id)))[0] // {}) as $old
     | $new
       + (if ($old.status // "") == $new.status
-         then ({verdict: $old.verdict, verdict_source: $old.verdict_source,
+         then ({verdict: $old.verdict,
                 evidence: $old.evidence, head: $old.head,
                 verified: $old.verified, intent: $old.intent, intent_note: $old.intent_note,
                 decision: $old.decision, note: $old.note}
@@ -195,10 +186,8 @@ cmd_list() {
     | select($d == "" or (($d | split(",")) | index($r.decision // "")))
     | select($l == "" or (($l | split(",")) | index($r.layer)))
     | select($lv == "" or (($lv | split(",")) | index($r.level)))
-    # 再判定待ち: 未判定・陳腐化したもの、および min の暫定判定 (本監査では必ず
-    # 判定し直す。安い層の判定を本監査の結論として残さないための引き戻し)
-    | select($needs == 0 or ($r.status == "manual"
-        and (($r.verdict | not) or ($r.head != $head) or (($r.verdict_source // "full") == "min"))))
+    # 再判定待ち: 未判定・陳腐化したもの
+    | select($needs == 0 or ($r.status == "manual" and (($r.verdict | not) or ($r.head != $head))))
     | select($verify == 0 or ($r | needs_verify($head)))
     | select($it == "" or (($it | split(",")) | index($r.intent // "")))
     # 衝突判定待ち: 標準から外れている項目のうち、まだ意図と突き合わせていないもの。
@@ -214,12 +203,10 @@ cmd_list() {
 # ---- set: 判定・判断を書き込む ----
 cmd_set() {
   local decision="" verdict="" evidence="" note="" intent="" intent_note="" verified=0 ids="" id
-  local source="full"
   while [ $# -gt 0 ]; do
     case "$1" in
       --decision) decision=${2:-}; shift 2 ;;
       --verdict)  verdict=${2:-};  shift 2 ;;
-      --source)   source=${2:-};   shift 2 ;;
       --evidence) evidence=${2:-}; shift 2 ;;
       --note)     note=${2:-};     shift 2 ;;
       --intent)      intent=${2:-};      shift 2 ;;
@@ -244,10 +231,6 @@ cmd_set() {
   case "$intent" in
     ""|aligned|unclear|conflicts) ;;
     *) echo "rs-findings: intent は aligned/unclear/conflicts のいずれか: $intent" >&2; exit 2 ;;
-  esac
-  case "$source" in
-    min|full) ;;
-    *) echo "rs-findings: --source は min/full のいずれか: $source" >&2; exit 2 ;;
   esac
 
   # 衝突の判断にも理由を必須にする。conflicts が理由なしで付くと、修正フローが
@@ -288,46 +271,17 @@ cmd_set() {
     exit 2
   fi
 
-  # 安い層 (min) の判定は、陳腐化していない本監査 (full) の判定を上書きしない。
-  # 未知 id と違ってこれは運用上の正当な分岐なので全体を拒否せず、該当 id だけ外して
-  # 残りは書き込む (min の一括判定が 1 件の衝突で丸ごと落ちると triage にならない)
-  local allids="$ids"
-  if [ -n "$verdict" ] && [ "$source" = min ]; then
-    local kept="" protected=""
-    for id in $ids; do
-      if jq -e --arg id "$id" --arg head "$(head_now)" '
-            select(.id == $id and (.verdict // "") != ""
-                   and ((.verdict_source // "full") == "full") and ((.head // "") == $head))
-          ' "$file" >/dev/null 2>&1; then
-        protected="$protected $id"
-      else
-        kept="$kept $id"
-      fi
-    done
-    if [ -n "$protected" ]; then
-      echo "rs-findings: 本監査 (full) の判定があるため min の判定は書き込まない:$protected" >&2
-      echo "  上書きするには repo-audit で判定し直す (min の判定は暫定値として扱う)" >&2
-    fi
-    ids=$kept
-  fi
-
-  local idsjson alljson
-  alljson=$(printf '%s\n' $allids | jq -R . | jq -sc .)
-  if [ -z "${ids// /}" ]; then
-    # 全件が full に保護された。書き込みはせず現状の行を返す (呼び出し側が結果を確認できる)
-    jq -c --argjson ids "$alljson" '. as $r | select($ids | index($r.id))' "$file"
-    return 0
-  fi
+  local idsjson
   idsjson=$(printf '%s\n' $ids | jq -R . | jq -sc .)
   jq -c --argjson ids "$idsjson" --arg d "$decision" --arg v "$verdict" \
         --arg e "$evidence" --arg n "$note" --arg head "$(head_now)" \
-        --arg it "$intent" --arg itn "$intent_note" --arg src "$source" \
+        --arg it "$intent" --arg itn "$intent_note" \
         --argjson verified "$verified" '
     . as $r
     | if ($ids | index($r.id)) then
       # verdict を書き換えたら verified は一旦落とす。同じ呼び出しで --verified も
       # 渡されていれば直後に立て直る (判定と反証を 1 回で確定させる経路)
-        (if $v != "" then (. + {verdict: $v, head: $head, verdict_source: $src} | del(.verified)) else . end)
+        (if $v != "" then (. + {verdict: $v, head: $head} | del(.verified)) else . end)
       | . + (if $d != "" then {decision: $d} else {} end)
         + (if $e != "" then {evidence: $e} else {} end)
         + (if $n != "" then {note: $n} else {} end)
@@ -353,9 +307,8 @@ cmd_set() {
     else . end
   ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
 
-  # 更新後の行を返す (呼び出し側が結果を確認できる)。min で保護された id も含めて
-  # 返し、書き込まれなかった行の現状が読めるようにする
-  jq -c --argjson ids "$alljson" '. as $r | select($ids | index($r.id))' "$file"
+  # 更新後の行を返す (呼び出し側が結果を確認できる)
+  jq -c --argjson ids "$idsjson" '. as $r | select($ids | index($r.id))' "$file"
 }
 
 # ---- summary: 集計と次アクション。監査を報告で終わらせないための _next 行 ----
@@ -365,15 +318,11 @@ cmd_summary() {
   # (判定して ng と分かった項目が集計から抜け落ちると、未対応の必須違反を見落とす)
   jq -sc --arg head "$(head_now)" "$needs_verify_def"'
     map(. + {_eff: (if .status == "manual" and (.verdict // "") != "" then .verdict else .status end)})
-    # 未判定・陳腐化。min の暫定判定はここに数えない — 判定自体はあり、修正フローへは
-    # 進めるため ($provisional として別に数え、本監査の再判定対象には --needs-verdict で残す)
+    # 未判定・陳腐化
     | (map(select(.status == "manual" and ((.verdict | not) or (.head != $head)))) | length) as $mp
     | (map(select(.decision == "pending")) | length) as $pending
     # 反証待ち (list --needs-verify と同じ定義を使う。2 か所に書くとずれる)
     | (map(select(needs_verify($head))) | length) as $unverified
-    # 安い層の暫定判定。本監査を通せば full の判定に置き換わる
-    | (map(select((.verdict // "") != "" and ((.verdict_source // "full") == "min")))
-       | length) as $provisional
     # 機械判定の逸脱を LLM 判定が覆した項目。監査が一番価値を出す食い違いなので
     # 件数として見えるようにする (status が示す事実は消さない)
     | (map(select((.status == "ng" or .status == "warn")
@@ -396,7 +345,6 @@ cmd_summary() {
        blocked:  $blocked,
        blocked_required: $blocked_required,
        manual_unjudged: $mp,
-       provisional: $provisional,
        overridden: $overridden,
        unverified: $unverified,
        intent_unchecked: $intent_unchecked,
@@ -421,9 +369,6 @@ cmd_summary() {
            elif $conflicts > 0 and $pending > 0 then "未決 \($pending) 件 (うち意図と衝突 \($conflicts) 件) — repo-audit-fix へ。衝突する項目は適用せず提示のみにする"
            elif $pending > 0 then "未決 \($pending) 件 — repo-audit-fix スキルで承認・適用できる"
            else "未決の指摘なし" end)
-          # 暫定判定が残っていることは、どの段階にいても伝える (安い層の判定で
-          # 修正まで進める設計なので、判定の質が違うことが見えないと混ざる)
-          + (if $provisional > 0 then " / 暫定判定 \($provisional) 件 (min 由来。確度が要るなら repo-audit で判定し直す)" else "" end)
           # required の保留も同じ枠。次アクションの本線は奪わないが、黙って消させない
           + (if $blocked_required > 0 then
                " / 前提未達で保留の required \($blocked_required) 件 (\(map(select(._eff == "blocked" and .level == "required")) | map(.id) | join(", "))) — 前提を埋めたら再監査する"

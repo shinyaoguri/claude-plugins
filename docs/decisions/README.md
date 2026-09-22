@@ -40,7 +40,7 @@
 | [0012](0012-audit-precision.md) | 精度は「根拠の接地・材料の下限・独立した反証」で上げる |
 | [0013](0013-standard-vs-repo-intent.md) | 標準は既定であり、リポ固有の設計意図との衝突を監査が判定する |
 | [0014](0014-audit-on-demand.md) | 監査は起動されたときに走れば足り、定期実行はしない |
-| [0015](0015-verdict-provenance.md) | 判定の出自を findings の行に持たせる |
+| [0015](0015-verdict-provenance.md) | 機械判定を LLM 判定が覆したとき、事実と理由の両方を残す (判定の出自 `verdict_source` は 0030 で廃止) |
 | [0019](0019-blocked-vs-skip.md) | 前提未達の保留 (blocked) を恒久的な対象外 (skip) と分ける |
 | [0016](0016-agent-behavior-hooks-in-plugin.md) | エージェントの振る舞いを縛るフックはプラグインが供給する |
 | [0017](0017-approval-at-the-plan.md) | 人間の承認はプラン 1 点へ集約する (plan-gate / plan-pass) |
