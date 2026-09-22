@@ -3,15 +3,13 @@
 # LLM に JSON を手で編集させないための決定論的な口。要 jq。
 #
 #   { bash rs-audit-repo.sh; bash rs-audit-github.sh; } | bash rs-findings.sh save
-#   bash rs-findings.sh list [--status ng,warn] [--decision pending] [--layer repo]
-#                            [--level required] [--needs-verdict] [--needs-verify]
-#                            [--needs-intent-check] [--intent conflicts]
+#   bash rs-findings.sh list [--decision pending] [--needs-verdict] [--needs-verify]
+#                            [--needs-intent-check]
 #   bash rs-findings.sh set --decision approved <id>...
 #   bash rs-findings.sh set --verdict warn --evidence "..." <id>
 #   bash rs-findings.sh set --verified --evidence "反証の結果..." <id>
 #   bash rs-findings.sh set --intent conflicts --intent-note "衝突の理由..." <id>
 #   bash rs-findings.sh summary
-#   bash rs-findings.sh path
 #
 # 保存先: <git common dir>/rs-audit/findings.jsonl。.git 配下なのでコミットに混入せず
 # worktree も汚さない (dirty 判定を伴う修正フローと衝突しない)。worktree からでも
@@ -61,7 +59,7 @@ set -uo pipefail
 command -v jq >/dev/null 2>&1 || { echo "rs-findings: jq が必要 (brew install jq)" >&2; exit 2; }
 
 usage() {
-  sed -n '3,13p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '3,12p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -160,14 +158,10 @@ cmd_save() {
 
 # ---- list: 条件で絞って JSON Lines を返す ----
 cmd_list() {
-  local status="" decision="" layer="" level="" intent="" needs=0 verify=0 intentchk=0
+  local decision="" needs=0 verify=0 intentchk=0
   while [ $# -gt 0 ]; do
     case "$1" in
-      --status) status=${2:-}; shift 2 ;;
       --decision) decision=${2:-}; shift 2 ;;
-      --layer) layer=${2:-}; shift 2 ;;
-      --level) level=${2:-}; shift 2 ;;
-      --intent) intent=${2:-}; shift 2 ;;
       --needs-verdict) needs=1; shift ;;
       --needs-verify) verify=1; shift ;;
       --needs-intent-check) intentchk=1; shift ;;
@@ -177,19 +171,14 @@ cmd_list() {
   [ -f "$file" ] || return 0
   # 行を $r に束縛してから絞る。`split(",") | index(.status)` と書くと index の中の
   # `.` がパイプ左の配列を指してしまい "Cannot index array with string" で落ちる
-  jq -c --arg s "$status" --arg d "$decision" --arg l "$layer" --arg lv "$level" \
-        --arg it "$intent" --arg head "$(head_now)" \
+  jq -c --arg d "$decision" --arg head "$(head_now)" \
         --argjson needs "$needs" --argjson verify "$verify" --argjson intentchk "$intentchk" "$needs_verify_def"'
     . as $r
     | (if $r.status == "manual" and ($r.verdict // "") != "" then $r.verdict else $r.status end) as $eff
-    | select($s == "" or (($s | split(",")) | index($eff)))
     | select($d == "" or (($d | split(",")) | index($r.decision // "")))
-    | select($l == "" or (($l | split(",")) | index($r.layer)))
-    | select($lv == "" or (($lv | split(",")) | index($r.level)))
     # 再判定待ち: 未判定・陳腐化したもの
     | select($needs == 0 or ($r.status == "manual" and (($r.verdict | not) or ($r.head != $head))))
     | select($verify == 0 or ($r | needs_verify($head)))
-    | select($it == "" or (($it | split(",")) | index($r.intent // "")))
     # 衝突判定待ち: 標準から外れている項目のうち、まだ意図と突き合わせていないもの。
     # 機械判定の ng / warn も対象に含む — LLM が文脈を持ち込める唯一の接点なので。
     # layer=meta (正本不在・未初期化) だけは除く。監査そのものの前提を報告する行で、
@@ -381,7 +370,6 @@ case "$cmd" in
   list)    cmd_list "$@" ;;
   set)     cmd_set "$@" ;;
   summary) cmd_summary ;;
-  path)    printf '%s\n' "$file" ;;
   *)       usage ;;
 esac
 exit 0

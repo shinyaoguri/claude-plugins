@@ -93,8 +93,8 @@ echo "manual 項目の判定 (verdict)"
 d=$(newrepo)
 got=$( cd "$d" && line a manual | bash "$target" save >/dev/null
        bash "$target" set --verdict ng --evidence "$EV" a >/dev/null
-       bash "$target" list --status ng | jq -r .id )
-check "a" "$got" "判定済み manual は実効 status で拾える"
+       bash "$target" list | jq -r 'select(.verdict == "ng") | .id' )
+check "a" "$got" "判定済み manual の verdict が行に載る"
 
 # 判定して ng と分かった項目が集計から抜けると、未対応の必須違反を見落とす
 d=$(newrepo)
@@ -363,14 +363,6 @@ check "1 | 反証待ち 1 件 — 独立した判定者に覆せるか確かめ�
   "反証待ちが残っていれば集計が次アクションに出す"
 
 echo
-echo "list --level"
-
-d=$(newrepo)
-got=$( cd "$d" && { line a ng required; line b warn; } | bash "$target" save >/dev/null
-       bash "$target" list --level required | jq -r .id )
-check "a" "$got" "level で絞れる (反証対象の抽出に使う)"
-
-echo
 echo "intent: 標準とリポの設計意図の衝突"
 
 # 機械判定の ng / warn も対象。LLM が文脈を持ち込める接点はここしかない
@@ -407,8 +399,8 @@ d=$(newrepo)
 got=$( cd "$d" && { line a ng required; line b warn; } | bash "$target" save >/dev/null
        bash "$target" set --intent conflicts --intent-note "$EV" a >/dev/null
        bash "$target" set --intent aligned --intent-note "$EV" b >/dev/null
-       bash "$target" list --intent conflicts | jq -r .id )
-check "a" "$got" "intent で絞れる (修正フローが提示のみの群を抽出する)"
+       bash "$target" list | jq -r 'select(.intent == "conflicts") | .id' )
+check "a" "$got" "intent が行に載る (修正フローは list の出力から提示のみの群を拾う)"
 
 # 標準に適合したのに古い衝突理由が残ると、次の逸脱時に的外れな理由が付いて回る
 d=$(newrepo)

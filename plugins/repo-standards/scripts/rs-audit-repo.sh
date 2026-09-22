@@ -5,21 +5,7 @@
 set -uo pipefail
 . "$(dirname "$0")/rs-lib.sh"
 
-# --cadence <bootstrap|drift> で項目を絞る。既定は全件 — 絞るのは「定期的に見直す」
-# 用途のためで、リポを初めて見るときに設置漏れが隠れては困る (ADR 0025)
-cadence_filter=""
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --cadence)
-      cadence_filter="${2:-}"
-      case "$cadence_filter" in
-        bootstrap|drift) ;;
-        *) echo "$(basename "$0"): --cadence は bootstrap か drift" >&2; exit 2 ;;
-      esac
-      shift 2 ;;
-    *) echo "$(basename "$0"): 不明な引数: $1" >&2; exit 2 ;;
-  esac
-done
+parse_cadence_arg "$@"
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || {
   emit not-a-git-repo meta required ng "git リポジトリではない (リポジトリ内で実行する)"
@@ -264,16 +250,7 @@ while IFS= read -r item; do
   ctype=$(jq -r .check.type <<<"$item")
 
 
-  # 可視性の条件 (when.visibility)
-  want_vis=$(jq -r '.when.visibility // ""' <<<"$item")
-  if [ -n "$want_vis" ] && [ "$want_vis" != "$visibility" ]; then
-    if [ "$visibility" = unknown ]; then
-      emit "$id" "$layer" "$level" skip "$want_vis リポのみ対象だが可視性を判定できない — $vis_reason"
-    else
-      emit "$id" "$layer" "$level" skip "$want_vis リポのみ対象 (このリポは $visibility)"
-    fi
-    continue
-  fi
+  emit_visibility_skip "$id" "$layer" "$level" "$item" "$visibility" "$vis_reason" && continue
 
   case "$ctype" in
     file_exists)
@@ -292,24 +269,7 @@ while IFS= read -r item; do
       else emit "$id" "$layer" "$level" "$(fail_status "$level")" "$pattern に一致なし — $why" "$fix" "$fix_kind"; fi
       ;;
     builtin)
-      name=$(jq -r .check.name <<<"$item")
-      if ! declare -F "builtin_$name" >/dev/null; then
-        emit "$id" "$layer" "$level" skip "builtin '$name' はこのスクリプトに未実装 (正本との契約ずれ。プラグイン更新が必要)"
-        continue
-      fi
-      result=$("builtin_$name")
-      case "$result" in
-        ok) emit "$id" "$layer" "$level" ok "" ;;
-        # ok:<詳細> は適合と判定した根拠が自明でない場合 (どう回り道して見つけたか)
-        ok:*) emit "$id" "$layer" "$level" ok "${result#ok:}" ;;
-        skip:*) emit "$id" "$layer" "$level" skip "${result#skip:}" ;;
-        # blocked:<理由> は別の標準項目が未達で判定できない場合 (前提が解消されれば判定対象に
-        # 戻る)。fix は渡さない — 当てる先はこの項目でなく前提側の項目にある
-        blocked:*) emit "$id" "$layer" "$level" blocked "${result#blocked:}" ;;
-        # fail:<詳細> は検査が具体的な違反箇所を掴んでいる場合 (どのブランチ・どのファイルか)
-        fail:*) emit "$id" "$layer" "$level" "$(fail_status "$level")" "${result#fail:} — $why" "$fix" "$fix_kind" ;;
-        *) emit "$id" "$layer" "$level" "$(fail_status "$level")" "$why" "$fix" "$fix_kind" ;;
-      esac
+      emit_builtin_result "$id" "$layer" "$level" "$(jq -r .check.name <<<"$item")" "$why" "$fix" "$fix_kind"
       ;;
     llm)
       prompt=$(jq -r .check.prompt <<<"$item")

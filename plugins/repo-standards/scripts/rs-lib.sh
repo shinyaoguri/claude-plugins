@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 # repo-standards プラグイン共通ライブラリ。各 rs-*.sh から source される。要 jq。
 #
-# チェックリスト正本 (repo-standards.json) の解決チェーン:
+# チェックリスト正本 (repo-standards.json) の解決:
 #   ① $REPO_STANDARDS_JSON (開発・テスト用の上書き)
 #   ② プラグイン同梱の repo-standards.json (主経路。正本そのもの。ADR 0022)
-#   ③ ~/.claude/repo-standards.json (旧経路。setup リポの ansible が張っていた symlink)
-#   ④ ~/.setup/claude/repo-standards.json (旧経路。playbook 未実行の新マシン向けだった)
 #
-# ③④ は移設の移行期だけの保険で、setup 側から実体が消えれば自然に外れる (dangling symlink は
-# [ -r ] を通らない)。同梱コピーを $CLAUDE_PLUGIN_ROOT でなくこのスクリプト自身の位置から
-# 引くのは、テストが rs-*.sh を直接叩く (プラグインとして起動しない) 経路でも効かせるため。
+# 同梱コピーを $CLAUDE_PLUGIN_ROOT でなくこのスクリプト自身の位置から引くのは、テストが rs-*.sh を
+# 直接叩く (プラグインとして起動しない) 経路でも効かせるため。setup リポ経由の旧経路 (~/.claude・
+# ~/.setup) は移行期の保険だったので外した (ADR 0030)。
 #
 # 出力契約 (rs-audit-min.sh を除く全 rs-*.sh 共通): JSON Lines。1 チェック = 1 行
 #   {"id","layer","level","status","detail","fix"?}
@@ -34,8 +32,7 @@
 resolve_standards() {
   local p bundled
   bundled=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)/repo-standards.json
-  for p in "${REPO_STANDARDS_JSON:-}" "$bundled" \
-    "$HOME/.claude/repo-standards.json" "$HOME/.setup/claude/repo-standards.json"; do
+  for p in "${REPO_STANDARDS_JSON:-}" "$bundled"; do
     [ -n "$p" ] && [ -r "$p" ] && { printf '%s\n' "$p"; return 0; }
   done
   return 1
@@ -63,4 +60,63 @@ emit_manifest_missing() {
   emit standards-manifest-missing meta required ng \
     "チェックリスト正本 repo-standards.json が見つからない" \
     "正本はプラグインに同梱されているので、ここに来るのは配布が壊れている状態。/plugin update repo-standards@shinyaoguri でプラグインを入れ直す"
+}
+
+# --cadence <bootstrap|drift> の引数解析。監査スクリプト共通。既定は全件 — 絞るのは「定期的に
+# 見直す」用途のためで、リポを初めて見るときに設置漏れが隠れては困る (ADR 0025)。
+# 結果は cadence_filter に入る。呼び出し側は parse_cadence_arg "$@" と書く
+parse_cadence_arg() {
+  cadence_filter=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cadence)
+        cadence_filter="${2:-}"
+        case "$cadence_filter" in
+          bootstrap|drift) ;;
+          *) echo "$(basename "$0"): --cadence は bootstrap か drift" >&2; exit 2 ;;
+        esac
+        shift 2 ;;
+      *) echo "$(basename "$0"): 不明な引数: $1" >&2; exit 2 ;;
+    esac
+  done
+}
+
+# 項目の when.visibility が今のリポに合わなければ skip を出して 0 を返す (呼び出し側は continue)。
+# 合っている・条件が無いときは 1。visibility が unknown のときは、なぜ判定できないかを添える
+# emit_visibility_skip <id> <layer> <level> <item json> <visibility> [unknown の理由]
+emit_visibility_skip() {
+  local want
+  want=$(jq -r '.when.visibility // ""' <<<"$4")
+  [ -n "$want" ] && [ "$want" != "$5" ] || return 1
+  if [ "$5" = unknown ]; then
+    emit "$1" "$2" "$3" skip "$want リポのみ対象だが可視性を判定できない — ${6:-理由不明}"
+  else
+    emit "$1" "$2" "$3" skip "$want リポのみ対象 (このリポは $5)"
+  fi
+  return 0
+}
+
+# builtin_<name> を呼んで結果を emit する。builtin の返り値の契約はここ 1 か所で読む:
+#   ok            適合
+#   ok:<詳細>     適合。根拠が自明でないとき (どう回り道して見つけたか)
+#   skip:<理由>   恒久的に対象外
+#   blocked:<理由> 別の標準項目が未達で今は判定できない。fix は渡さない (当てる先は前提側の項目)
+#   fail:<詳細>   違反。検査が具体的な違反箇所を掴んでいるとき (どのブランチ・どのファイルか)
+#   その他        違反 (why をそのまま detail に)
+# emit_builtin_result <id> <layer> <level> <name> <why> <fix> <fix_kind>
+emit_builtin_result() {
+  local id=$1 layer=$2 level=$3 name=$4 why=$5 fix=$6 fix_kind=$7 result
+  if ! declare -F "builtin_$name" >/dev/null; then
+    emit "$id" "$layer" "$level" skip "builtin '$name' はこのスクリプトに未実装 (正本との契約ずれ。プラグイン更新が必要)"
+    return
+  fi
+  result=$("builtin_$name")
+  case "$result" in
+    ok)        emit "$id" "$layer" "$level" ok "" ;;
+    ok:*)      emit "$id" "$layer" "$level" ok "${result#ok:}" ;;
+    skip:*)    emit "$id" "$layer" "$level" skip "${result#skip:}" ;;
+    blocked:*) emit "$id" "$layer" "$level" blocked "${result#blocked:}" ;;
+    fail:*)    emit "$id" "$layer" "$level" "$(fail_status "$level")" "${result#fail:} — $why" "$fix" "$fix_kind" ;;
+    *)         emit "$id" "$layer" "$level" "$(fail_status "$level")" "$why" "$fix" "$fix_kind" ;;
+  esac
 }

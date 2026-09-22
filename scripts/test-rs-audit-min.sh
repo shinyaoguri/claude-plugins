@@ -96,14 +96,12 @@ order=$(grep -E '^(NG|WARN) ' <<<"$out" | head -1)
 case "$order" in NG*) ok "NG が WARN より先" ;; *) fail "先頭が NG でない: $order" ;; esac
 
 echo
-echo "detail の切り詰め (--width):"
+echo "detail の切り詰め:"
 
-grep -q '…' <<<"$out" && ok "既定幅で長い detail を切り詰める" \
+grep -q '…' <<<"$out" && ok "長い detail を切り詰める (60 文字)" \
   || fail "長い detail が切り詰められていない: $out"
-run --no-github --width 0 | grep -qE '^NG +ng-item *$' \
-  && ok "--width 0 で detail を落とす" || fail "--width 0 でも detail が付く"
-run --no-github --width 400 | grep -q '…' \
-  && fail "--width 400 でも切り詰めている" || ok "--width 400 では切り詰めない"
+run --no-github --width 0 >/dev/null 2>&1; c=$?
+[ "$c" -eq 2 ] && ok "--width は持たない (未知の引数として exit 2)" || fail "--width → exit=$c"
 
 echo
 echo "ヘッダ (GitHub 上のリポを特定できないとき):"

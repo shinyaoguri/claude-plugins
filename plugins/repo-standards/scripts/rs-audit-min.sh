@@ -3,11 +3,10 @@
 # 逸脱した項目 (ng / warn) を 1 行ずつに圧縮して報告する。LLM 判定 (status: manual) には
 # 踏み込まず件数だけ数える。
 #
-#   bash rs-audit-min.sh [--no-github] [--width N] [--cadence bootstrap|drift]
+#   bash rs-audit-min.sh [--no-github] [--cadence bootstrap|drift]
 #
 #     --no-github  gh api を使う層② (GitHub 設定) を丸ごと省く。オフライン・未認証時や
 #                  ローカル構成だけ見たいときに使う
-#     --width N    detail の切り詰め幅 (既定 60 文字)。0 で detail を出さない
 #     --cadence C  その cadence の項目だけに絞る (drift = 作業が状態を崩していく項目。ADR 0025)
 #
 # 他の rs-*.sh と違い出力は JSON Lines ではなくプレーンテキスト。トークン最小化が目的の
@@ -26,11 +25,9 @@ here=$(dirname "$0")
 command -v jq >/dev/null 2>&1 || { echo "rs-audit-min: jq が必要 (brew install jq)" >&2; exit 2; }
 
 with_github=1 cadence=
-width=60
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-github) with_github=0; shift ;;
-    --width) width=${2:-60}; shift 2 ;;
     --cadence)
       cadence=${2:-}
       case "$cadence" in bootstrap|drift) ;; *) echo "rs-audit-min: --cadence は bootstrap か drift" >&2; exit 2 ;; esac
@@ -38,14 +35,14 @@ while [ $# -gt 0 ]; do
     *) echo "rs-audit-min: 不明な引数: $1" >&2; exit 2 ;;
   esac
 done
-case "$width" in ''|*[!0-9]*) echo "rs-audit-min: --width は 0 以上の整数" >&2; exit 2 ;; esac
 
 raw=$({
   bash "$here/rs-audit-repo.sh" ${cadence:+--cadence "$cadence"}
   [ "$with_github" -eq 1 ] && bash "$here/rs-audit-github.sh" ${cadence:+--cadence "$cadence"}
 })
 
-printf '%s\n' "$raw" | jq -sr --argjson w "$width" '
+printf '%s\n' "$raw" | # detail は 60 文字で切り詰める (1 項目 1 行の短さを守る。長い理由は本監査で読む)
+jq -sr --argjson w 60 '
   (map(select(.id == "_meta"))) as $meta
   | (map(select(.id != null and .id != "_meta" and .id != "_next"))) as $rows
   | ((($meta | map(select(.layer == "repo")))[0]) // {}) as $mr
@@ -68,19 +65,13 @@ printf '%s\n' "$raw" | jq -sr --argjson w "$width" '
        | map(select(.status == "ng" or .status == "warn"))
        | sort_by((if .status == "ng" then 0 else 1 end), .id)
        | map((if .status == "ng" then "NG  " else "WARN" end) + " " + .id
-             + (if $w == 0 then ""
-                else "  " + ((.detail // "") | gsub("\\s+"; " ")
-                             | if length > $w then .[0:$w] + "…" else . end)
-                end)))
+             + "  " + ((.detail // "") | gsub("\\s+"; " ") | if length > $w then .[0:$w] + "…" else . end)))
     # required の保留だけ行として出す (recommended まで出すとこのスクリプトの存在理由である
     # トークン最小化に反する。件数は下の集計行で読める)
     + ($blocked_req
        | sort_by(.id)
        | map("BLOCK " + .id
-             + (if $w == 0 then ""
-                else "  " + ((.detail // "") | gsub("\\s+"; " ")
-                             | if length > $w then .[0:$w] + "…" else . end)
-                end)))
+             + "  " + ((.detail // "") | gsub("\\s+"; " ") | if length > $w then .[0:$w] + "…" else . end)))
     + [ "ok=\($c.ok // 0) ng=\($c.ng // 0) warn=\($c.warn // 0) blocked=\($c.blocked // 0) skip=\($c.skip // 0) manual=\($c.manual // 0)" ]
     + [ "次: "
         + (if $nomanifest then "正本 repo-standards.json が無い — プラグインの配布が壊れている。/plugin update repo-standards@shinyaoguri で入れ直す"
