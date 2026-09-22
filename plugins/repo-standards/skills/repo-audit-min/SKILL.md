@@ -1,7 +1,7 @@
 ---
 name: repo-audit-min
-description: "cwd のリポジトリを個人標準 (repo-standards.json) と突き合わせる低コストな監査。機械判定を圧縮して報告し、LLM 判定は材料をスクリプトで集めてから安いモデル 1 本に一括で任せる。求められれば判定を暫定値として findings に残し修正フローへ渡す。Use for a cheap repository standards check, as a pre-flight before the full repo-audit, or when checking many repositories in a row."
-allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-min.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-evidence.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh:*)"
+description: "cwd のリポジトリを個人標準 (repo-standards.json) と突き合わせる低コストな監査。機械判定を圧縮して報告し、LLM 判定は材料をスクリプトで集めてから安いモデル 1 本に一括で任せる。報告専用で、findings には保存しない。Use for a cheap repository standards check, as a pre-flight before the full repo-audit, or when checking many repositories in a row."
+allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-min.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-evidence.sh:*)"
 ---
 
 cwd が git リポジトリでなければ「git リポジトリ内で実行してください」と伝えて終了する。
@@ -36,33 +36,17 @@ cwd が git リポジトリでなければ「git リポジトリ内で実行し�
 
 ## その場で直したいと言われたら
 
-本監査をやり直さず修正フローへ渡せる。**求められたときだけ**この経路に入る (既定は triage で止める):
-
-1. 機械判定を findings へ保存する。**出力は手順 1 と同じなので提示しない** (同じ内容を二度読ませない):
-
-   ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-audit-min.sh --save
-   ```
-
-2. 手順 2 で得た判定を**暫定値として**書き戻す。`--source min` を必ず付ける — これが無いと安い層の判定が本監査の判定として記録される:
-
-   ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-findings.sh set --verdict <ok|warn|ng|skip> --evidence "<返ってきた根拠>" --source min <id>
-   ```
-
-   本監査の判定が既にある項目はスクリプトが書き込みを拒み、その旨を stderr に返す (暫定値で本監査の結論を置き換えない)。拒まれた項目はそのまま先へ進んでよい
-
-3. repo-audit-fix スキルへ渡す。**判定が暫定値であることを伝える** — 反証も衝突判定も通っていないので、必須違反 (NG) の修正までに留め、判断が微妙な項目は repo-audit で見直すよう促す
+このスキルの判定は findings に残らないので、ここから直接は修正フローへ渡せない。**repo-audit (本監査) を通してから repo-audit-fix へ**進む。安い層の判定をそのまま修正へ運ぶ近道は、findings の全行に出自を持たせる代償に見合わなかったので畳んだ ([ADR 0030](https://github.com/shinyaoguri/claude-plugins/blob/main/docs/decisions/0030-simplify-the-audit.md))。
 
 ## このスキルの割り切り
 
 - **LLM 判定は安いモデルの一括判定**。材料は `rs-evidence.sh` が決定論的に集めた範囲に限られ、判定係が開けるファイルも 3 件までに制限してある。**深い乖離検知 (ADR の決定内容と実装のずれなど) は本監査に劣る** — 疑わしい項目が出たら repo-audit で見直す
-- **既定では findings を保存しない**。保存するのは `--save` を明示したときだけで、書き戻す判定も `--source min` の暫定値として記録される。本監査の判定を上書きすることはなく、次に repo-audit を回せば必ず判定し直される
-- **反証・衝突判定をしない**。この 2 つは本監査の作法で、暫定判定は反証待ちにも数えない
+- **findings を保存しない**。判定は報告して終わりで、次に repo-audit を回せば一から判定される
+- **反証・衝突判定をしない**。この 2 つは本監査の作法
 - **修正の提案・適用をしない**。逸脱の指摘までで止める (修正は repo-audit-fix の担当)
 
 **定期的に見直すだけなら `--cadence drift`** を付けると、作業そのものが状態を崩していく 12 項目 (ブランチの取り残し・ADR の遅れ・allow の溜まり等) に絞れる。既定は全件で、リポジトリを初めて見るときの設置漏れを隠さない ([ADR 0025](https://github.com/shinyaoguri/claude-plugins/blob/main/docs/decisions/0025-cadence-bootstrap-vs-drift.md))。
 
-これらが要るなら repo-audit スキル (本監査) を使う。判定項目そのものの正本は `${CLAUDE_PLUGIN_ROOT}/repo-standards.json` で、項目の追加・変更はこのリポジトリへの PR で行う (ADR 0022)。判定の出自と上書き規則は [ADR 0015](https://github.com/shinyaoguri/claude-plugins/blob/main/docs/decisions/0015-verdict-provenance.md)。
+これらが要るなら repo-audit スキル (本監査) を使う。判定項目そのものの正本は `${CLAUDE_PLUGIN_ROOT}/repo-standards.json` で、項目の追加・変更はこのリポジトリへの PR で行う (ADR 0022)。
 
 このスキル自体の不具合・使いにくさに気付いたら、report-issue スキルで shinyaoguri/claude-plugins へ気軽に起票する。
