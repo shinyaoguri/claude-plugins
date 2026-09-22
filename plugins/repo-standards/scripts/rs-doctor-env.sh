@@ -301,10 +301,10 @@ fi
 # どちらもリポでなくマシン共通の git 設定なので env 層で見る
 # (正本: setup リポの tasks/git.yml。経緯: claude-plugins#67)
 #
-# [gone] のうちマージ済み PR の head と tip が一致するものは SessionStart hook
-# (stale-branch-sweep.sh) が自動で消す。fetch.prune が効いていないとその判定材料が
-# 揃わず、残りの棚卸しにはエイリアスが要る — どちらも「自動で消える範囲」を
-# 説明できないと緑が誤読される (経緯: claude-plugins#99)
+# [gone] のブランチを実際に消すのは、setup の Stop hook が走らせる `git gone-clean`
+# (プラグインの SessionStart hook は既定ブランチに取り込み済みのものしか消さない。ADR 0030)。
+# fetch.prune が効いていないと [gone] の判定材料が揃わず、エイリアスがあっても Stop hook に
+# 口が無ければ溜まり続ける — 3 つ揃って初めて「自動で消える」と言える (経緯: claude-plugins#99)
 git_fix="setup リポで ansible-playbook playbook_sillicon_mac.yml --tags git を実行する"
 prune=$(git config --global --get fetch.prune 2>/dev/null) || prune=""
 if [ "$prune" = "true" ]; then
@@ -319,13 +319,21 @@ missing=""
 for a in gone gone-clean; do
   git config --global --get "alias.$a" >/dev/null 2>&1 || missing="$missing $a"
 done
-if [ -z "$missing" ]; then
-  emit env-git-gone-alias env recommended ok \
-    "alias.gone / alias.gone-clean が設定済み (SessionStart hook が自動で消すのは「マージ済み PR の head と tip が一致する [gone]」だけ。close された PR や未 push のコミットが載っているものは残るので、棚卸しはこのエイリアスで手動)"
-else
+# 自動実行の口: settings.json の Stop hook のどれかが git gone-clean を呼んでいるか。
+# settings.json が読めないときは口が無いものとして扱う (破損そのものは節 5 が報告する)
+gone_hook=$(jq -r '[.hooks.Stop[]?.hooks[]?.command // "" | select(test("git +gone-clean"))] | length' \
+  "$claude_dir/settings.json" 2>/dev/null) || gone_hook=0
+if [ -n "$missing" ]; then
   emit env-git-gone-alias env recommended warn \
-    "git のエイリアスが未設定 ($missing) — squash merge 後に残るローカルブランチのうち、SessionStart hook が自動で消せない分 (close された PR・未 push のコミットが載っているもの) を棚卸しする手立てが無い" \
+    "git のエイリアスが未設定 ($missing) — squash merge 後に残るローカルブランチ (upstream が [gone]) を消す手立てが無い" \
     "$git_fix"
+elif [ "${gone_hook:-0}" -eq 0 ]; then
+  emit env-git-gone-alias env recommended warn \
+    "alias.gone / alias.gone-clean はあるが、Stop hook に git gone-clean が登録されていない — squash merge 後のローカルブランチが手で消すまで溜まり続ける" \
+    "~/.claude/settings.json (正本は setup リポの claude/settings.json) の hooks.Stop に git gone-clean を足す。すぐ消すなら git gone で一覧を確かめてから git gone-clean"
+else
+  emit env-git-gone-alias env recommended ok \
+    "alias.gone / alias.gone-clean が設定済みで、Stop hook が git gone-clean を走らせている (squash merge 後のローカルブランチはターンの終わりに消える)"
 fi
 
 # [gone] 判定は upstream を持つブランチしか拾えない。一度も push していない
