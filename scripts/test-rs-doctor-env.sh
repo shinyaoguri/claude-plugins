@@ -200,7 +200,6 @@ configured='[fetch]
 	gone-clean = !git gone | while read -r b; do git branch -D "$b"; done'
 
 assert_git env-git-fetch-prune ok "fetch.prune = true" "$configured"
-assert_git env-git-gone-alias  ok "エイリアス両方あり" "$configured"
 
 assert_git env-git-fetch-prune warn "設定が空 (未設定)" ""
 assert_git env-git-gone-alias  warn "設定が空 (未設定)" ""
@@ -212,6 +211,33 @@ assert_git env-git-fetch-prune warn "fetch.prune = false" '[fetch]
 # 片方だけでは棚卸しが完結しないので warn (境界値)
 assert_git env-git-gone-alias warn "gone だけあり gone-clean が無い" '[alias]
 	gone = !git for-each-ref'
+
+# [gone] のブランチを実際に消すのは Stop hook の `git gone-clean` (プラグインの SessionStart hook は
+# 既定ブランチに取り込み済みのものしか消さない。ADR 0030)。エイリアスがあっても自動実行の口が
+# 無ければ溜まり続けるので、口の有無まで見る
+# assert_gone_hook <期待 status> <ケース名> <settings.json の中身>
+assert_gone_hook() {
+  local want=$1 name=$2 conf=$3
+  local h="$tmp/gonehome-$RANDOM" gc="$tmp/gitconfig-$RANDOM"
+  mkdir -p "$h/.claude"
+  printf '%s\n' "$conf" > "$h/.claude/settings.json"
+  printf '%s\n' "$configured" > "$gc"
+  local got
+  got=$( HOME="$h" GIT_CONFIG_GLOBAL="$gc" RS_GH_AUTH_STATUS="(認証情報なし)" bash "$target" \
+    | jq -r 'select(.id == "env-git-gone-alias") | "\(.level)/\(.status)"' )
+  if [ "$got" = "recommended/$want" ]; then
+    echo "  [ok]   $name → $got"
+  else
+    echo "  [FAIL] $name → 期待 recommended/$want / 実際 ${got:-出力なし}"
+    failures=$((failures + 1))
+  fi
+}
+assert_gone_hook ok "Stop hook が git gone-clean を走らせている" \
+  '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"git rev-parse --git-dir >/dev/null 2>&1 && git gone-clean >/dev/null 2>&1 || true"}]}]}}'
+assert_gone_hook warn "エイリアスはあるが自動実行の口が無い" '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"~/.claude/other.sh"}]}]}}'
+assert_gone_hook warn "hooks 自体が無い (境界値)" '{"model":"opus"}'
+assert_gone_hook warn "別のイベントにしか登録されていない (境界値)" \
+  '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"git gone-clean"}]}]}}'
 
 echo
 echo "env-hook-* (settings.json が参照するフックの実在):"
