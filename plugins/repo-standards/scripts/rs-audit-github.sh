@@ -6,21 +6,7 @@
 set -uo pipefail
 . "$(dirname "$0")/rs-lib.sh"
 
-# --cadence <bootstrap|drift> で項目を絞る。既定は全件 — 絞るのは「定期的に見直す」
-# 用途のためで、リポを初めて見るときに設置漏れが隠れては困る (ADR 0025)
-cadence_filter=""
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --cadence)
-      cadence_filter="${2:-}"
-      case "$cadence_filter" in
-        bootstrap|drift) ;;
-        *) echo "$(basename "$0"): --cadence は bootstrap か drift" >&2; exit 2 ;;
-      esac
-      shift 2 ;;
-    *) echo "$(basename "$0"): 不明な引数: $1" >&2; exit 2 ;;
-  esac
-done
+parse_cadence_arg "$@"
 
 manifest=$(resolve_standards) || { emit_manifest_missing; exit 0; }
 
@@ -210,12 +196,7 @@ while IFS= read -r item; do
   fix_kind=$(jq -r '.fix_kind // ""' <<<"$item")
   ctype=$(jq -r .check.type <<<"$item")
 
-  # 可視性の条件 (when.visibility) が合わない項目は対象外
-  want_vis=$(jq -r '.when.visibility // ""' <<<"$item")
-  if [ -n "$want_vis" ] && [ "$want_vis" != "$visibility" ]; then
-    emit "$id" github "$level" skip "$want_vis リポのみ対象 (このリポは $visibility)"
-    continue
-  fi
+  emit_visibility_skip "$id" github "$level" "$item" "$visibility" && continue
 
   case "$ctype" in
     gh_api)
@@ -237,22 +218,7 @@ while IFS= read -r item; do
       fi
       ;;
     builtin)
-      name=$(jq -r .check.name <<<"$item")
-      if ! declare -F "builtin_$name" >/dev/null; then
-        emit "$id" github "$level" skip "builtin '$name' はこのスクリプトに未実装 (正本との契約ずれ。プラグイン更新が必要)"
-        continue
-      fi
-      result=$("builtin_$name")
-      case "$result" in
-        ok) emit "$id" github "$level" ok "" ;;
-        skip:*) emit "$id" github "$level" skip "${result#skip:}" ;;
-        # blocked:<理由> は別の標準項目が未達で判定できない場合。fix は渡さない
-        # (当てる先は前提側の項目にある)
-        blocked:*) emit "$id" github "$level" blocked "${result#blocked:}" ;;
-        # fail:<詳細> は検査が具体的な違反箇所を掴んでいる場合
-        fail:*) emit "$id" github "$level" "$(fail_status "$level")" "${result#fail:} — $why" "$fix" "$fix_kind" ;;
-        *) emit "$id" github "$level" "$(fail_status "$level")" "$why" "$fix" "$fix_kind" ;;
-      esac
+      emit_builtin_result "$id" github "$level" "$(jq -r .check.name <<<"$item")" "$why" "$fix" "$fix_kind"
       ;;
     *)
       emit "$id" github "$level" skip "check.type '$ctype' はこのスクリプトの対象外"
