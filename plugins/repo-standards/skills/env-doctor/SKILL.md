@@ -34,6 +34,7 @@ allowed-tools: "Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh:*), Bas
 - 役目を終えたローカルブランチの自動掃除: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/stale-branch-sweep.sh` (SessionStart)。止めたいときは `RS_BRANCH_SWEEP=0`
 - 残骸 worktree の畳み込みと通知: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/worktree-sweep.sh` (SessionStart)。`git worktree prune` (実ディレクトリが消えた登録だけ) と、**既定ブランチを掴んだ linked worktree の通知**を行う。掴まれていると別の場所での `gh pr merge --delete-branch` がマージ後のローカル後処理で落ちる (#114)。worktree の削除はしない (ADR 0018 と同じ立場)。止めたいときは `RS_WORKTREE_SWEEP=0`
 - 合意の無いまま実装が広がるのを止めるプランゲート: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/plan-gate.sh` (PreToolUse)。閾値は `RS_PLAN_GATE_THRESHOLD`、止めたいときは `RS_PLAN_GATE=0`
+- 同じリポジトリの別 worktree への書き込みを止める取り違えガード: `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/worktree-guard.sh` (PreToolUse)。訂正後のパスを添えて deny する。止めたいときは `RS_WORKTREE_GUARD=0`
 - 検査項目の実装: `${CLAUDE_PLUGIN_ROOT}/scripts/rs-doctor-env.sh` (すべてビルトイン。正本 JSON に依存しない)
 - 削除系 (`git gone-clean`・実体コピーの `rm`) を allowed-tools に載せていないのは意図的。スキルからの削除は提示のみに留める方針を許可の側でも担保する (自動で消える分は hook 側で既に消えている)
 
