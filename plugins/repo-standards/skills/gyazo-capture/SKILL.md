@@ -1,6 +1,6 @@
 ---
 name: gyazo-capture
-description: "GUI を伴う作業 (画面・見た目・動き・操作手順) を Issue・PR に記録するとき、スクリーンショットやアニメーション WebP を Gyazo にアップロードして URL を得る (リポジトリに画像をコミットしないため)。ドキュメント本文に載り続ける画像の作法 (台帳・追記型・鮮度検査) と、証跡を CI で回す形も扱う。Use when a screenshot, animated WebP or GIF, or other visual evidence needs to be attached to a GitHub issue or pull request, when README or docs embed images, or when setting up CI that captures or requires visual evidence."
+description: "GUI を伴う作業 (画面・見た目・動き・操作手順) を Issue・PR に記録するとき、スクリーンショットやアニメーション WebP を Gyazo にアップロードして URL を得る (リポジトリに画像をコミットしないため)。ドキュメント本文に載り続ける画像の作法 (台帳・追記型・鮮度検査) と、証跡を CI で回す形も扱う。Use when a screenshot, animated WebP or GIF, or other visual evidence needs to be attached to a GitHub issue or pull request, when README or docs embed images, when setting up CI that captures or requires visual evidence, or when Gyazo is down (upload returns 5xx, returned URLs are 404) and the evidence has to go to GitHub attachments instead."
 allowed-tools: "mcp__gyazo-mac__gyazo_list_capturable_windows, mcp__gyazo-mac__gyazo_get_captured_image"
 ---
 
@@ -9,7 +9,8 @@ allowed-tools: "mcp__gyazo-mac__gyazo_list_capturable_windows, mcp__gyazo-mac__g
 - **見た目が変わる / 見た目を説明する** → 静止画。画面そのものは A で撮る
 - **動きが分からないと正誤を判定できない** (アニメーション・遷移・ドラッグ等のインタラクション・時間依存の描画・進行してはじめて出る不具合) → **静止画に加えてアニメーション WebP**。B で載せる
 - 動きは静止画の置き換えではなく**併載**。差分の精査は静止画の方が向く
-- **その PR / Issue でだけ見せる**なら A・B。**ドキュメント本文に載り続ける**なら C (作法が違う)。証跡を運任せにせず回し続けるなら D
+- **CLI / TUI の出力は画像ではなくテキストで載せる**。検索に引っかかり・差分が取れ・トークンが安く・写り込みが構造的に起きない。全画面の TUI (fzf など) も、Terminal.app なら `osascript -e 'tell application "Terminal" to get contents of selected tab of front window'` で配置ごと読める (落ちるのは色だけ)。色やレイアウトの崩れそのものが論点のときだけ画像にする
+- **その PR / Issue でだけ見せる**なら A・B。**ドキュメント本文に載り続ける**なら C (作法が違う)。証跡を運任せにせず回し続けるなら D。**Gyazo が落ちているとき**は E (GitHub の添付へ退避する)
 
 ## A. 画面を撮る (MCP)
 
@@ -26,7 +27,7 @@ allowed-tools: "mcp__gyazo-mac__gyazo_list_capturable_windows, mcp__gyazo-mac__g
    gyazo_get_captured_image
    ```
 
-3. `![説明](URL)` の形で Issue・PR の本文に貼る。何の画面か・どこを見てほしいかを本文で補う (画像だけでは検索に引っかからない)
+3. 返った URL が**引けることを確かめてから** (B-2 の末尾)、`![説明](URL)` の形で Issue・PR の本文に貼る。何の画面か・どこを見てほしいかを本文で補う (画像だけでは検索に引っかからない)
 
 ## B. 手元のファイル (動き・画像) を載せる
 
@@ -62,6 +63,12 @@ MCP のツールは画面キャプチャ専用で、**手元のファイルを�
    ```bash
    curl -s -F "access_token=$(secret-read "${GYAZO_TOKEN_REF:-gyazo-token}")" \
      -F "imagedata=@motion.webp" -F "title=<何の動きか>" https://upload.gyazo.com/api/upload
+   ```
+
+   **返った URL は必ず引いて確かめる。** upload が通っても URL が読めるとは限らず、Gyazo の障害は**「貼ったつもりで死んでいる」**形で現れる (上げた側は成功していて、気付けるのは引いたときだけ)。`i.gyazo.com` は転送を挟まず画像を直接返すので HEAD でよい:
+
+   ```bash
+   curl -sI "$GYAZO_URL" -o /dev/null -w '%{http_code}\n'   # 200 でなければ E へ
    ```
 
    **1 ファイル 40MB が上限** (2026-08-22 実測。38.3MB は通り、40.5MB は `413 Request Entity Too Large`)。証跡がこの桁に届くことはまずないが、届いたらフレーム数か幅を落とす。Gyazo は**縮小も再エンコードもしない** — 5250x5250 / 38.3MB がそのまま配信されることを確認済み。
@@ -101,6 +108,75 @@ B との違いは**寿命**。README・docs・チュートリアルに載り続�
 
 実例は metaphor の `scripts/require-visual-evidence.py` (標準ライブラリのみ。本文とラベルは実行時に API から読むので、直した後は `gh run rerun --failed <run-id>` だけで通り push が要らない)。
 
+## E. Gyazo が落ちているとき — GitHub の添付へ退避する
+
+上げ先が Gyazo 1 本だと、**そこが落ちた瞬間に絵の要る PR が出せなくなる** (視覚証跡を必須にしているリポでは merge もできない)。2026-09 に実際に倒れ、複数のリポで PR が止まった (#194・#200)。
+
+**見分け方** — 権限でも回線でもないことを数秒で切り分ける:
+
+| 引くもの | 平常 | 落ちている (2026-09 の実測) |
+| --- | --- | --- |
+| `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://upload.gyazo.com/api/upload` (トークン無し) | **400** (トークンが無いと断る = 生きている) | **502** |
+| 上げて返った URL (`curl -sI`) | 200 | 404 |
+| `https://gyazo.com/` の `<title>` | 通常の題 | `Gyazo - Under Maintenance` |
+
+**落ちていれば、指示を待たずに退避路へ切り替える。** GitHub には添付の API が無い (REST にも GraphQL にも口が無い) ので、**ブラウザを操作できる有人のセッションでだけ**通る。
+
+- 要るもの: GitHub にサインイン済みで、**ページの `input[type=file]` へ手元のファイルを渡せるブラウザ道具** (Claude in Chrome の `file_upload` など)。サインインしていない埋め込みのブラウザや、ファイルを渡す口の無い道具では通らない
+- 形式: PNG・アニメーション WebP・mp4 がそのまま通り、**原本と SHA-256 まで一致する**。動きも B と同じ WebP でよい (束ね直しは要らない)。camo を通らないので B の「camo が途中で切る」心配は無く、効くのは GitHub の上限 (画像と GIF 10MB・動画 10MB (有料プランのリポは 100MB)・その他 25MB)
+- **無人セッションでは通らない**。Gyazo も落ちていて証跡を残せないなら、PR 本文にそう書いて Draft に落とし、有人のセッションへ返す
+
+**上げる** (5 手):
+
+1. **入力欄を用意する**。PR のコメント欄は `input[type=file]` を持つ (`id="fc-new_comment_field"`) ので `find` で参照を取る。Issue のコメント欄 (新 UI) は押すまで入力欄が DOM に無いので、自分で置く:
+
+   ```javascript
+   const staging = document.createElement('input');
+   staging.type = 'file';
+   staging.id = 'evidence-staging-input';
+   staging.setAttribute('aria-label', 'evidence staging file input');  // find が拾えるように
+   staging.style.cssText = 'position:fixed;top:0;left:0;z-index:99999;background:#fff';
+   document.body.appendChild(staging);
+   ```
+
+2. **その欄へファイルを渡す** (ブラウザ道具の file upload)。1 回に複数枚まとめて渡せる
+3. **自分で置いた欄を使ったときだけ**、コメント欄へ `paste` を合成して渡し直す (`fc-new_comment_field` は GitHub 自身の受け口なので要らない):
+
+   ```javascript
+   const carrier = new DataTransfer();
+   carrier.items.add(document.getElementById('evidence-staging-input').files[0]);
+   const area = document.querySelector('textarea');
+   area.focus();
+   area.dispatchEvent(new ClipboardEvent('paste', {clipboardData: carrier, bubbles: true, cancelable: true}));
+   ```
+
+4. 数秒おいて、コメント欄の値から URL を取り出す。画像は `<img … src="https://github.com/user-attachments/assets/<uuid>" />`、動画は裸の URL 1 行で入る。**値を丸ごと返さず、`src` と `alt` だけを正規表現で抜いて返す** — 何枚も上げると道具の出力が途中で切れ、最後の数枚の URL を失う
+5. 置いた欄を外し、**下書きを空にする** (本文の投稿は別に行う)
+
+**URL は投稿して初めて公開される。** 貼っただけでは上げた本人のセッションからしか読めず、無認証で引くと 404 になる。**公開されるのは、その URL が新しく投稿されたコメントに現れたとき**で、PR 本文の編集では公開されない。だから順序は:
+
+1. コメント欄で上げて URL を得る
+2. **その URL を含むコメントを投稿する** (Issue でも PR でもよい — 添付はスレッドに縛られない)
+3. PR 本文へ載せたいなら、同じ URL をそこへ書く。PR を作る前に 2 を済ませておけば、最初から URL 入りの本文で作れる (本文を後から書き換えると CI が回り直すリポもある)
+
+投稿直後の 404 は「失敗」ではなく「まだ」で、数十秒おいて引き直す。
+
+**検算は GET で追って、原本とバイト数を突き合わせる。** 添付は署名付き S3 への 302 で、その先は GET 用に署名されているので **HEAD は 403 で弾かれる** — `-sI` で打つと、公開済みの添付が失敗に見える:
+
+```bash
+curl -sL "$ATTACHMENT_URL" -o pulled -w '%{http_code} %{size_download}\n'   # 200 と原本と同じバイト数
+shasum -a 256 pulled "<上げた原本>"                                        # 強めるなら
+```
+
+**使えない場面**:
+
+- **C (ドキュメント本文に載り続ける画像) には使わない。** GitHub の添付は同じ絵でも毎回別の URL を返すので、「同じ中身なら同じ URL」という Gyazo の性質に乗った台帳・鮮度検査が成り立たない。C は Gyazo が戻るまで待つ
+- **消す口が無い。** 本文から URL を外しても添付は残り、URL を知っていれば引ける。送る前の写り込みの確認が唯一の防壁になる
+
+**通らない道**: クリップボードに載せて `cmd+v` を合成する形は、道具によっては合成したキー入力がブラウザの貼り付けを起こさず、欄が空のまま (エラーも出ない) になる。バイト列を JavaScript のソースへ書き写す形は、大きな文字列が道具の引数の途中で欠ける。**手元のバイト列をページへ運ぶのは `input[type=file]` へ渡す 1 手に寄せる。**
+
+**Gyazo が戻るまで、テキストで残せるものはテキストで残す** (CLI / TUI は「何を載せるか」のとおり)。退避路で上げた証跡は、戻った後に Gyazo へ上げ直す必要は無い (PR / Issue の一回限りの証跡なので)。
+
 ## 守ること
 
 - **外部サービスへの送信になる**。静止画は撮る前に、画面に秘密情報・個人情報・実データが写っていないか確かめる。判断がつかなければユーザーに確認する
@@ -124,11 +200,16 @@ B との違いは**寿命**。README・docs・チュートリアルに載り続�
   1. **絶対パスで呼ぶ** — `~/.setup/bin/secret-read "${GYAZO_TOKEN_REF:-gyazo-token}"`。実体はここにあるので、PATH が通っていないだけならこれで足りる。**Keychain キャッシュが効くので 1Password のロックに依存しない**
   2. setup リポジトリ自体が無い環境のときだけ `op read` へ読み替える (参照は手元の 1Password の項目から自分で組む。スキルには書かない)。**1Password のロック解除が要るので、無人セッションでは承認待ちで止まる** (実際に 2 分ハングした事例がある)。最後の手段として扱う
 - **アップロードが `unauthorized`** — まず `secret-read --refresh "${GYAZO_TOKEN_REF:-gyazo-token}"` を試す (Gyazo 側でトークンを作り直したのに Keychain のキャッシュが古いままだと、これで直る)。それでも通らなければトークン自体を発行し直す。`https://gyazo.com/oauth/applications` (要ログイン) でアプリを登録して発行する。OAuth フローは不要で、developer ページで出せるトークン 1 本でよい
-- **動きはアニメーション WebP で載せる。mp4 は経路が無い** (2026-08-22 実測)。MCP 側に動画キャプチャは無く、**Gyazo の Upload API は mp4 を `400 Not an Image` で拒む — Pro アカウントでも同じ**。GitHub 側も外部 URL の mp4 は貼れず、`<video>` タグは**属性ではなく要素ごと**サニタイズで消える (Markdown の `![](...)` に mp4 を渡すと camo が画像として扱い、壊れた画像になる)。GitHub が再生するのは Issue / PR へ**直接アップロード**した mp4 だけで、そこには公式 API が無いためエージェントからは扱えない
+- **動きはアニメーション WebP で載せる。mp4 は経路が無い** (2026-08-22 実測)。MCP 側に動画キャプチャは無く、**Gyazo の Upload API は mp4 を `400 Not an Image` で拒む — Pro アカウントでも同じ**。GitHub 側も外部 URL の mp4 は貼れず、`<video>` タグは**属性ではなく要素ごと**サニタイズで消える (Markdown の `![](...)` に mp4 を渡すと camo が画像として扱い、壊れた画像になる)。GitHub が再生するのは Issue / PR へ**直接アップロード**した mp4 だけで、そこへは公式 API が無く、E のブラウザ経由でだけ上げられる。動きの既定は WebP のままでよい
+- **アップロードが 5xx を返す / 返った URL が 404 / キャプチャが何分も完了しない** — まず E の「見分け方」で Gyazo 側の障害かを切り分ける。トークン無しの POST まで 5xx なら権限でも回線でもないので、トークンの作り直しや権限の確認に時間を使わず E へ切り替える
+- **退避路で上げた URL が、投稿したのに 404** — 数十秒おいて引き直す。それでも 404 なら、その URL を含むコメントをまだ投稿していない (PR 本文へ書いただけでは公開されない)
+- **退避路の検算が 302 / 403** — 公開はされていて、打ち方が合っていない。`curl -sL` (GET で追う) で打ち直す。これを「上がっていない」と読んで Draft に落とさない
+- **注入した入力欄が `find` で見つからない** — `aria-label` を付けていない。画面外や `display:none` にも置かない
 - 上記で解決しないこのスキル自体の不具合・使いにくさは、report-issue スキルで shinyaoguri/claude-plugins へ気軽に起票する (Gyazo アプリ本体の不具合は起票せずユーザーへ報告)
 
 ## 前提
 
 - macOS は Gyazo v9.9.0 以降 / Windows は v5.8.0 以降。MCP サーバーの登録は setup の `tasks/claude.yml` が行う (バイナリは cask の gyazo が入れる)
 - 開発者向けプレビュー版のため仕様変更の可能性があり、公式サポート対象外
+- E はブラウザを操作できる有人のセッションと、GitHub にサインイン済みで `input[type=file]` へファイルを渡せるブラウザ道具が要る。秘密は要らない
 - B は `img2webp` (連番から動きを作る場合。`brew install webp`) と `secret-read` を使う。幅を変えるときだけ `ffmpeg` も要る。`secret-read` は setup リポジトリの `bin/` にあり、zshenv が PATH へ通す (値は macOS Keychain から読み、**キャッシュが無いときだけ** `op` = 1Password CLI を呼ぶ)
