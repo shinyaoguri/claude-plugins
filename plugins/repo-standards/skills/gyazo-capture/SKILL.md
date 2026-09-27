@@ -60,7 +60,7 @@ MCP のツールは画面キャプチャ専用で、**手元のファイルを�
 2. **アップロードする**。返り値 `url` (`https://i.gyazo.com/<id>.webp`) をそのまま貼る。GitHub は外部画像を camo 経由で配信するが、アニメーションは保たれる
 
    ```bash
-   curl -s -F "access_token=$(secret-read "${GYAZO_TOKEN_REF:-op://Automation/Gyazo API/credential}")" \
+   curl -s -F "access_token=$(secret-read "${GYAZO_TOKEN_REF:-gyazo-token}")" \
      -F "imagedata=@motion.webp" -F "title=<何の動きか>" https://upload.gyazo.com/api/upload
    ```
 
@@ -105,7 +105,7 @@ B との違いは**寿命**。README・docs・チュートリアルに載り続�
 
 - **外部サービスへの送信になる**。静止画は撮る前に、画面に秘密情報・個人情報・実データが写っていないか確かめる。判断がつかなければユーザーに確認する
 - **動きの証跡はフレームを読み込んで検めない** (全フレームの画像読み込みはトークンが高く、写り込みの確率に見合わない)。代わりに B-3 のとおり**撮影範囲と意図をテキストで残す**。写り込みが後から見つかったときは、ユーザーが Gyazo 側で当該画像を削除して対処する
-- アクセストークンは **`secret-read` で都度読む** (`op read` を直接呼ばない)。値を出力させない・平文の環境変数として常駐させない・チャットに貼らせない。環境変数に持たせてよいのは参照文字列 (`GYAZO_TOKEN_REF`) だけ。`secret-read` は 1Password から読んだ値を macOS Keychain にキャッシュするので、**1Password がロックされていても無人セッションが止まらない**。キャッシュしてよい参照は setup の `secret-cache-allowlist` が決めており、SSH 鍵やアカウント認証は載らない
+- アクセストークンは **`secret-read` で都度読む** (`op read` を直接呼ばない)。値を出力させない・平文の環境変数として常駐させない・チャットに貼らせない。環境変数に持たせてよいのは**役割名** (`GYAZO_TOKEN_REF`。既定は `gyazo-token`) だけ。役割にどの項目を充てるかは、各自の 1Password でその項目に**タグ `secret-read/gyazo-token`** を付けて決める — 保管庫や項目の名前は人ごとに違うので、`op://` の参照をスキルや成果物に書かない。`secret-read` は 1Password から読んだ値を macOS Keychain にキャッシュするので、**1Password がロックされていても無人セッションが止まらない**。キャッシュしてよい役割は setup の `secret-cache-allowlist` が決めており、SSH 鍵やアカウント認証は載らない。`op://` の参照を直接渡すとキャッシュされず、無人セッションはロック解除の承認待ちで止まる
 - **`gyazo_get_captured_image` は URL と画像そのものを返す**。画像の読み込みはトークン高コストなので、URL が目的なら**呼び出しは 1 回に留める** (待ちが必要でも連打しない)
 - 完了済みのキャプチャが複数あるとまとめて返る。狙った 1 枚だけが欲しいなら、キャプチャ → 取得を 1 セットずつ行う
 - **リポジトリに画像・動きの証跡をコミットしない** (容量を圧迫する)
@@ -115,15 +115,15 @@ B との違いは**寿命**。README・docs・チュートリアルに載り続�
 
 - **`No windows found`** — Gyazo Menu.app と MCP サーバーが両方起動していても返ることがある。macOS の画面収録の許可が MCP サーバーに無いのが原因。システム設定 > プライバシーとセキュリティ > 画面収録 で Gyazo を確認する。**許可の付与は GUI 操作なので代行せず、ユーザーへ依頼する**
 - **取得結果が空 / 「まだ完了していない」旨が返る** — アップロードが未完了なだけ。**間隔を空けて**もう一度呼ぶ (画像が返るコストがあるので連打しない)。**`gyazo_list_capturable_windows` がウィンドウを返せている = 画面収録の許可は足りている**ので、ここで権限を疑わない (許可が無ければ上の `No windows found` が返る)。数分待っても返らないときは回線の遅さを疑い、ユーザーへ**権限ではなく状況**を伝える
-- **`isn't a vault in this account`** — vault 名かアイテム名の間違い。`op vault list` / `op item list --vault <name>` で実体を確かめる (値は表示しない)
+- **`1Password にタグ secret-read/gyazo-token の付いた項目が無い`** — 役割に充てる項目が決まっていない。1Password で Gyazo のトークンを持つ項目にタグ `secret-read/gyazo-token` を付ける (値は項目の credential フィールドから読まれる)。**タグの付け替えは GUI 操作で、人の 1Password なのでユーザーへ依頼する**。複数の項目に付いていると「〜件ある。1 件に絞る」と名乗るので、1 件に絞る。状態は `secret-read --check` で値を出さずに確かめられる
 - **`secret-read: command not found`** — setup リポジトリの `bin/` が PATH に無い。原因は `echo "$GYAZO_TOKEN_REF"` の結果で分かれる:
   - **参照は入っているのに PATH にだけ無い** — Claude デスクトップアプリが、zshenv を張る前 (または変える前) の PATH を持ち続けている。アプリは起動時の PATH を保持し、Bash ツールのシェルスナップショットが zshenv の後でそれを書き戻すので、変数は届いても PATH の追加だけが消える (setup#154)。symlink を張り直しても直らない。**恒久対処はアプリの再起動**で、セッションが落ちるのでユーザーへ依頼する
   - **参照も空** — zshenv 自体が読まれていない。`ansible-playbook playbook_sillicon_mac.yml --tags zshrc` で symlink を張り直す
 
   どちらでも、その場で続けたいときは順に:
-  1. **絶対パスで呼ぶ** — `~/.setup/bin/secret-read "$GYAZO_TOKEN_REF"`。実体はここにあるので、PATH が通っていないだけならこれで足りる。**Keychain キャッシュが効くので 1Password のロックに依存しない**
-  2. setup リポジトリ自体が無い環境のときだけ `op read` へ読み替える。**1Password のロック解除が要るので、無人セッションでは承認待ちで止まる** (実際に 2 分ハングした事例がある)。最後の手段として扱う
-- **アップロードが `unauthorized`** — まず `secret-read --refresh "$GYAZO_TOKEN_REF"` を試す (Gyazo 側でトークンを作り直したのに Keychain のキャッシュが古いままだと、これで直る)。それでも通らなければトークン自体を発行し直す。`https://gyazo.com/oauth/applications` (要ログイン) でアプリを登録して発行する。OAuth フローは不要で、developer ページで出せるトークン 1 本でよい
+  1. **絶対パスで呼ぶ** — `~/.setup/bin/secret-read "${GYAZO_TOKEN_REF:-gyazo-token}"`。実体はここにあるので、PATH が通っていないだけならこれで足りる。**Keychain キャッシュが効くので 1Password のロックに依存しない**
+  2. setup リポジトリ自体が無い環境のときだけ `op read` へ読み替える (参照は手元の 1Password の項目から自分で組む。スキルには書かない)。**1Password のロック解除が要るので、無人セッションでは承認待ちで止まる** (実際に 2 分ハングした事例がある)。最後の手段として扱う
+- **アップロードが `unauthorized`** — まず `secret-read --refresh "${GYAZO_TOKEN_REF:-gyazo-token}"` を試す (Gyazo 側でトークンを作り直したのに Keychain のキャッシュが古いままだと、これで直る)。それでも通らなければトークン自体を発行し直す。`https://gyazo.com/oauth/applications` (要ログイン) でアプリを登録して発行する。OAuth フローは不要で、developer ページで出せるトークン 1 本でよい
 - **動きはアニメーション WebP で載せる。mp4 は経路が無い** (2026-08-22 実測)。MCP 側に動画キャプチャは無く、**Gyazo の Upload API は mp4 を `400 Not an Image` で拒む — Pro アカウントでも同じ**。GitHub 側も外部 URL の mp4 は貼れず、`<video>` タグは**属性ではなく要素ごと**サニタイズで消える (Markdown の `![](...)` に mp4 を渡すと camo が画像として扱い、壊れた画像になる)。GitHub が再生するのは Issue / PR へ**直接アップロード**した mp4 だけで、そこには公式 API が無いためエージェントからは扱えない
 - 上記で解決しないこのスキル自体の不具合・使いにくさは、report-issue スキルで shinyaoguri/claude-plugins へ気軽に起票する (Gyazo アプリ本体の不具合は起票せずユーザーへ報告)
 
