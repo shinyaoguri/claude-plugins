@@ -42,7 +42,9 @@ for arg in "$@"; do
   case "$arg" in [0-9]*) number="$arg"; break ;; esac
 done
 case "${number:-}" in
-  7|11)  printf '{"state":"OPEN","labels":[{"name":"verify: triaged"}]}' ;;
+  7|11)  printf '{"state":"OPEN","labels":[{"name":"verify: triaged"}],"issueType":{"name":"Bug"}}' ;;
+  12)    printf '{"state":"OPEN","labels":[{"name":"verify: triaged"}],"issueType":{"name":"Design"}}' ;;
+  13)    printf '{"state":"OPEN","labels":[{"name":"verify: triaged"}],"issueType":null}' ;;  # 型なし
   8)     printf '{"state":"OPEN","labels":[{"name":"bug"}]}' ;;          # 印が無い
   9)     printf '{"state":"CLOSED","labels":[{"name":"verify: triaged"}]}' ;;
   *)     exit 1 ;;                                                        # 引けない
@@ -50,6 +52,18 @@ esac
 STUB
 chmod +x "$sandbox/bin/gh"
 export PATH="$sandbox/bin:$PATH"
+
+# モデルの格の印 (model-tier.sh が置く)。実物の ~/.claude を読まないよう砂場へ向ける
+export RS_MODEL_TIER_DIR="$sandbox/model-tier"
+mkdir -p "$RS_MODEL_TIER_DIR"
+# with_tier <格|none> <関数> <引数...> — セッション s1 の格の印を置いてから叩く
+with_tier() {
+  local t="$1"; shift
+  rm -f "$RS_MODEL_TIER_DIR/s1.tier"
+  [ "$t" = none ] || printf '%s\n' "$t" > "$RS_MODEL_TIER_DIR/s1.tier"
+  "$@"
+  rm -f "$RS_MODEL_TIER_DIR/s1.tier"
+}
 
 plans="$sandbox/plans"
 mkdir -p "$plans"
@@ -158,10 +172,21 @@ check "プランファイルが見つからない" pass \
      bash "$hook" 2>"$sandbox/err" | { read -r out || true; [ -z "${out:-}" ] && echo pass || echo "$out"; })"
 
 echo
+echo "== モデルの格で自動承認を絞る (ADR 0031) =="
+
+check "格の印が無ければ Design でも通す (いままでどおり)" allow "$(with_tier none decision '# #12 — 設計を決める')"
+check "high は Design でも通す" allow "$(with_tier high decision '# #12 — 設計を決める')"
+check "mid は Bug を通す" allow "$(with_tier mid decision '# #7 — つまみの色を直す')"
+check "mid は型の無い Issue を通す" allow "$(with_tier mid decision '# #13 — 型の無い Issue')"
+check "mid は Design を人へ返す" pass "$(with_tier mid decision '# #12 — 設計を決める')"
+check "low はトリアージ済みの Bug でも人へ返す" pass "$(with_tier low decision '# #7 — つまみの色を直す')"
+check "読めない印は印が無いのと同じ" allow "$(with_tier bogus decision '# #12 — 設計を決める')"
+
+echo
 echo "== deny は決して返さない =="
 # 消したかった OK ボタンを別の形で作らないための不変条件 (ADR 0017)
 denies=0
-for plan in '# #7 x' '# #8 x' '# #9 x' '# #404 x' '# other/thing#7 x' '# 番号なし'; do
+for plan in '# #7 x' '# #12 x' '# #8 x' '# #9 x' '# #404 x' '# other/thing#7 x' '# 番号なし'; do
   out=$(run "$plan")
   [ -z "$out" ] && continue
   [ "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.decision.behavior')" = "deny" ] && denies=$((denies + 1))

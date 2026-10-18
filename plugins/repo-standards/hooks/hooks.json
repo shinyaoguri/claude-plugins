@@ -65,6 +65,11 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/scripts/worktree-sweep.sh",
             "timeout": 10,
             "statusMessage": "Checking leftover worktrees"
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/scripts/model-tier.sh",
+            "timeout": 5
           }
         ]
       }
@@ -77,6 +82,17 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/scripts/ci-watch-stop.sh",
             "timeout": 30,
             "statusMessage": "Checking CI on the pushed PR"
+          }
+        ]
+      }
+    ],
+    "PostModelSwitch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/scripts/model-tier.sh",
+            "timeout": 5
           }
         ]
       }

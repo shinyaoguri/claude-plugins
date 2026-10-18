@@ -118,10 +118,26 @@ done
 # ので設定は要らない (そういうリポでは今までどおり人へ返る)
 label=${RS_PLAN_PASS_LABEL:-verify: triaged}
 
-view=$(gh issue view "$issue" --repo "$owner_repo" --json state,labels 2>/dev/null) || exit 0
+# --- モデルの格 ----------------------------------------------------------------
+# トリアージが固めたのは「何をすれば済むか」で、「どう作るか」の判断までは固めていない。
+# その判断を任せられるかはモデルの格で変わるので、格の印 (model-tier.sh が置く) を見て
+# 自動承認を絞る — 低は一切通さず、中は Issue Type が Design のものを通さない (ADR 0031)。
+# 印が無い・high はいままでどおり
+session=$(printf '%s' "$input" | jq -r '.session_id // ""')
+tier=""
+if [ -n "$session" ]; then
+  tier_mark="${RS_MODEL_TIER_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/model-tier}/$session.tier"
+  [ -f "$tier_mark" ] && tier=$(head -n 1 "$tier_mark" 2>/dev/null)
+fi
+[ "$tier" = "low" ] && exit 0
+
+view=$(gh issue view "$issue" --repo "$owner_repo" --json state,labels,issueType 2>/dev/null) || exit 0
 [ -n "$view" ] || exit 0
 [ "$(printf '%s' "$view" | jq -r '.state // ""')" = "OPEN" ] || exit 0
 printf '%s' "$view" | jq -e --arg l "$label" 'any(.labels[]?.name; . == $l)' >/dev/null 2>&1 || exit 0
+if [ "$tier" = "mid" ]; then
+  [ "$(printf '%s' "$view" | jq -r '.issueType.name? // ""')" = "Design" ] && exit 0
+fi
 
 jq -n --arg r "$owner_repo#$issue はトリアージ済み ($label) なので、プランの承認を待たずに通した。完了条件は既に人が固めており、着手時の突き合わせも済んでいる。プランはいままでどおり記録される。待たせたいときは RS_PLAN_PASS=0。" \
   '{hookSpecificOutput: {hookEventName: "PermissionRequest", decision: {behavior: "allow"}, decisionReason: $r}}'

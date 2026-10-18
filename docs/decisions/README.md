@@ -44,6 +44,7 @@
 | [0019](0019-blocked-vs-skip.md) | 前提未達の保留 (blocked) を恒久的な対象外 (skip) と分ける |
 | [0016](0016-agent-behavior-hooks-in-plugin.md) | エージェントの振る舞いを縛るフックはプラグインが供給する |
 | [0017](0017-approval-at-the-plan.md) | 人間の承認はプラン 1 点へ集約する (plan-gate / plan-pass) |
+| [0031](0031-model-tier-routing.md) | セッションのモデルの格を機械で判定し、引き受けるタスクと判断の出口を変える (plan-pass は格で自動承認を絞る) |
 | [0018](0018-provable-branch-deletion.md) | プラグインによるブランチの自動削除は「失われないと証明できる範囲」= 既定ブランチの祖先に限る ([gone] は 0030 で gone-clean へ) |
 
 ### 一部廃止・置換済み (経緯を辿るとき用)
